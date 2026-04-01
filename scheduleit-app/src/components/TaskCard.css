@@ -1,0 +1,61 @@
+.task-card {
+  --task-color: var(--color-green);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 16px;
+  padding: 16px 20px;
+  border: 1px solid var(--task-color);
+  border-radius: var(--radius-sm);
+  background-color: transparent;
+  color: var(--task-color);
+  transition: var(--transition-smooth);
+}
+
+.task-card:hover {
+  background-color: rgba(255, 255, 255, 0.05);
+  box-shadow: 0 4px 12px rgba(0,0,0,0.05);
+}
+
+.task-content h3 {
+  font-size: 1.1rem;
+  font-weight: 500;
+  margin-bottom: 4px;
+}
+
+.task-content p {
+  font-size: 0.95rem;
+  opacity: 0.9;
+}
+
+.task-actions {
+  display: flex;
+  gap: 12px;
+}
+
+.action-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  border-radius: var(--radius-sm);
+  color: var(--task-color);
+  background: transparent;
+}
+
+.action-btn:hover {
+  background-color: var(--task-color);
+  color: var(--bg-primary);
+  transform: scale(1.05);
+}
+
+.complete-btn svg, .details-btn svg {
+  width: 28px;
+  height: 28px;
+}
+
+/* Specific to dark mode overrides for cards */
+html.dark .task-card:hover {
+  background-color: rgba(0, 0, 0, 0.1);
+}
