@@ -28,7 +28,7 @@ function RoundaboutMenu({ tasks, position, onClose, onComplete }) {
     });
   }, [tasks]);
 
-  const bind = useDrag(({ down, movement: [mx, my], tap }) => {
+  const bind = useDrag(({ down, offset: [ox, oy], tap }) => {
     // Only process if it's not a simple tap
     if (tap) return; 
 
@@ -38,7 +38,7 @@ function RoundaboutMenu({ tasks, position, onClose, onComplete }) {
     
     bubblePositions.forEach((bp) => {
       // distance from drag point to bubble center
-      const dist = Math.sqrt(Math.pow(mx - bp.x, 2) + Math.pow(my - bp.y, 2));
+      const dist = Math.sqrt(Math.pow(ox - bp.x, 2) + Math.pow(oy - bp.y, 2));
       if (dist < minDist) {
         minDist = dist;
         closest = bp.task.id;
@@ -48,7 +48,7 @@ function RoundaboutMenu({ tasks, position, onClose, onComplete }) {
     setActiveTask(closest);
 
     if (!down) {
-      if (closest && Math.sqrt(mx*mx + my*my) > 30) {
+      if (closest && Math.sqrt(ox*ox + oy*oy) > 30) {
         onComplete(closest);
         onClose();
         return;
@@ -56,15 +56,24 @@ function RoundaboutMenu({ tasks, position, onClose, onComplete }) {
       // Snap back if unreleased empty
       api.start({ x: 0, y: 0, immediate: false });
     } else {
-      api.start({ x: mx, y: my, immediate: true });
+      api.start({ x: ox, y: oy, immediate: true });
     }
   }, {
+    from: () => [x.get(), y.get()],
     bounds: { left: -120, right: 120, top: -120, bottom: 120 },
     rubberband: true
   });
 
   return (
-    <div className="roundabout-overlay" onClick={onClose}>
+    <div 
+      {...bind()} 
+      className="roundabout-overlay" 
+      onClick={(e) => {
+        // Only close if they tapped the background directly without dragging
+        if (e.target === e.currentTarget) onClose();
+      }}
+      style={{ touchAction: 'none' }}
+    >
       <div 
         className="roundabout-container" 
         onClick={(e) => e.stopPropagation()}
@@ -93,11 +102,9 @@ function RoundaboutMenu({ tasks, position, onClose, onComplete }) {
         
         {/* The central draggable knob */}
         <animated.div 
-          {...bind()} 
           className="roundabout-knob"
           style={{ 
-            transform: to([x, y], (kx, ky) => `translate(calc(-50% + ${kx}px), calc(-50% + ${ky}px))`),
-            touchAction: 'none' 
+            transform: to([x, y], (kx, ky) => `translate(calc(-50% + ${kx}px), calc(-50% + ${ky}px))`)
           }}
         >
           <div className="knob-inner" />
@@ -189,13 +196,15 @@ export default function CalendarView({ tasks, onCompleteTask }) {
                   {dayTasks.map(task => (
                     <div 
                       key={task.id + (task.isHistorical ? '-hist' : '')} 
-                      className={`task-dot ${task.isHistorical ? 'historical' : ''}`} 
+                      className={`task-label ${task.isHistorical ? 'historical' : ''}`} 
                       style={{ 
                         backgroundColor: task.color,
-                        opacity: task.isHistorical ? 0.3 : 1
+                        opacity: task.isHistorical ? 0.35 : 1
                       }}
                       title={task.name + (task.isHistorical ? ' (Completed)' : '')}
-                    />
+                    >
+                      {task.name.length > 20 ? task.name.substring(0, 18) + '...' : task.name}
+                    </div>
                   ))}
                 </div>
               </div>

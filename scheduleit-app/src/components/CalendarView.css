@@ -69,16 +69,24 @@
   margin-top: auto;
 }
 
-.task-dot {
-  width: 12px;
-  height: 12px;
-  border-radius: 50%;
-  box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+.task-label {
+  font-size: 0.65rem;
+  line-height: 1.1;
+  color: white; /* Ensure text is legible against custom colors */
+  padding: 2px 4px;
+  border-radius: 4px;
+  margin-bottom: 2px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100%;
+  font-weight: 500;
+  box-shadow: 0 1px 2px rgba(0,0,0,0.1);
   transition: transform 0.2s;
 }
 
-.task-dot:hover {
-  transform: scale(1.2);
+.task-label:hover {
+  transform: scale(1.05);
 }
 
 /* -- ROUNDABOUT MENU -- */
@@ -176,7 +184,23 @@
 
 @media (max-width: 768px) {
   .calendar-grid-7x2 {
-    /* on mobile, 7x2 might be too squeezed horizontally. Keep 7x2 but require landscape or allow horizontal scroll */
-    min-width: 600px;
+    /* Allow the grid to squeeze tightly on mobile without scrolling */
+    min-width: unset;
+    min-height: 300px;
+    grid-template-columns: repeat(3, 1fr);
+    grid-template-rows: auto;
+  }
+  
+  .cell-hitbox {
+    padding: 6px;
+    min-height: 80px;
+  }
+  
+  .day-name { font-size: 0.75rem; }
+  .day-num { font-size: 1rem; }
+  
+  .task-label {
+    font-size: 0.65rem;
+    padding: 2px;
   }
 }
