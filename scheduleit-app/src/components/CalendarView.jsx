@@ -132,10 +132,18 @@ export default function CalendarView({ tasks, onCompleteTask }) {
       
       const startDayNum = daysRemaining - wiggle;
       const endDayNum = daysRemaining + wiggle;
+      
+      const completedDayStr = new Date(task.completed_at).toISOString().split('T')[0];
 
       days.forEach((day, index) => {
-        if (index >= startDayNum && index <= endDayNum) {
-          map[day.toISOString()].push(task);
+        const dStr = day.toISOString().split('T')[0];
+        
+        const isHistorical = (dStr === completedDayStr);
+        const isActive = (index >= startDayNum && index <= endDayNum);
+        
+        // If it's active today OR it was completed today, show it on the map
+        if (isActive || isHistorical) {
+          map[day.toISOString()].push({ ...task, isHistorical: !isActive && isHistorical });
         }
       });
     });
@@ -151,16 +159,17 @@ export default function CalendarView({ tasks, onCompleteTask }) {
           const isToday = index === 0;
           const dayId = day.toISOString();
           const dayTasks = dayTasksMap[dayId] || [];
+          const activeTasks = dayTasks.filter(t => !t.isHistorical);
 
           return (
             <div 
               key={dayId} 
-              className={`calendar-cell ${isToday ? 'today' : ''} ${dayTasks.length > 0 ? 'has-tasks' : ''}`}
+              className={`calendar-cell ${isToday ? 'today' : ''} ${activeTasks.length > 0 ? 'has-tasks' : ''}`}
             >
               <div 
                 className="cell-hitbox" 
                 onClick={(e) => {
-                  if (dayTasks.length > 0) {
+                  if (activeTasks.length > 0) {
                     const rect = e.currentTarget.getBoundingClientRect();
                     setActiveDay({ 
                       id: dayId, 
@@ -179,10 +188,13 @@ export default function CalendarView({ tasks, onCompleteTask }) {
                 <div className="task-indicators">
                   {dayTasks.map(task => (
                     <div 
-                      key={task.id} 
-                      className="task-dot" 
-                      style={{ backgroundColor: task.color }}
-                      title={task.name}
+                      key={task.id + (task.isHistorical ? '-hist' : '')} 
+                      className={`task-dot ${task.isHistorical ? 'historical' : ''}`} 
+                      style={{ 
+                        backgroundColor: task.color,
+                        opacity: task.isHistorical ? 0.3 : 1
+                      }}
+                      title={task.name + (task.isHistorical ? ' (Completed)' : '')}
                     />
                   ))}
                 </div>
@@ -191,7 +203,7 @@ export default function CalendarView({ tasks, onCompleteTask }) {
               {/* Render Roundabout Menu if active */}
               {activeDay?.id === dayId && (
                 <RoundaboutMenu 
-                  tasks={dayTasks} 
+                  tasks={activeTasks} 
                   position={activeDay}
                   onClose={() => setActiveDay(null)}
                   onComplete={(taskId) => {
