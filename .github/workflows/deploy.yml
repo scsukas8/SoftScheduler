@@ -1,0 +1,36 @@
+name: Deploy to Firebase Hosting
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'scheduleit-app/**'
+      - '.github/workflows/deploy.yml'
+
+jobs:
+  build_and_deploy:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Install Dependencies
+        run: npm ci
+        working-directory: ./scheduleit-app
+
+      - name: Build App
+        run: npm run build
+        working-directory: ./scheduleit-app
+        
+      - id: auth
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: 'projects/1073857724039/locations/global/workloadIdentityPools/github-actions-pool/providers/github-provider'
+          service_account: 'github-actions-deployer@scheduleapp-491917.iam.gserviceaccount.com'
+          
+      - name: Deploy to Firebase
+        run: npx firebase-tools deploy --only hosting
+        working-directory: ./scheduleit-app
