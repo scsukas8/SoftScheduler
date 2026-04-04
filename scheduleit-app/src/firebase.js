@@ -1,5 +1,10 @@
 import { initializeApp } from "firebase/app";
-import { getAuth, GoogleAuthProvider } from "firebase/auth";
+import { 
+  getAuth, 
+  GoogleAuthProvider, 
+  setPersistence, 
+  browserLocalPersistence 
+} from "firebase/auth";
 import { getFirestore } from "firebase/firestore";
 
 // TODO: Replace with your actual Firebase project config 
@@ -20,5 +25,9 @@ const app = initializeApp(firebaseConfig);
 export const auth = getAuth(app);
 export const db = getFirestore(app);
 export const googleProvider = new GoogleAuthProvider();
+
+// Force persistence to survive page refreshes
+setPersistence(auth, browserLocalPersistence)
+  .catch((error) => console.error("Auth Persistence Error:", error));
 
 export default app;
