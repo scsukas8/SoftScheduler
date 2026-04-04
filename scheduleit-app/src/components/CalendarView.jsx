@@ -141,6 +141,7 @@ export default function CalendarView({ tasks, onCompleteTask }) {
       const endDayNum = daysRemaining + wiggle;
       
       const completedDayStr = new Date(task.completed_at).toISOString().split('T')[0];
+      const isActuallyOverdue = daysRemaining < 0;
 
       days.forEach((day, index) => {
         const dStr = day.toISOString().split('T')[0];
@@ -149,8 +150,12 @@ export default function CalendarView({ tasks, onCompleteTask }) {
         const isActive = (index >= startDayNum && index <= endDayNum);
         
         // If it's active today OR it was completed today, show it on the map
-        if (isActive || isHistorical) {
-          map[day.toISOString()].push({ ...task, isHistorical: !isActive && isHistorical });
+        if (isActive || isHistorical || (index === 0 && isActuallyOverdue)) {
+          map[day.toISOString()].push({ 
+            ...task, 
+            isHistorical: !isActive && isHistorical,
+            isOverdue: index === 0 && isActuallyOverdue
+          });
         }
       });
     });
@@ -195,14 +200,15 @@ export default function CalendarView({ tasks, onCompleteTask }) {
                 <div className="task-indicators">
                   {dayTasks.map(task => (
                     <div 
-                      key={task.id + (task.isHistorical ? '-hist' : '')} 
-                      className={`task-label ${task.isHistorical ? 'historical' : ''}`} 
+                      key={task.id + (task.isHistorical ? '-hist' : '') + (task.isOverdue ? '-overdue' : '')} 
+                      className={`task-label ${task.isHistorical ? 'historical' : ''} ${task.isOverdue ? 'overdue' : ''}`} 
                       style={{ 
                         backgroundColor: task.color,
                         opacity: task.isHistorical ? 0.35 : 1
                       }}
-                      title={task.name + (task.isHistorical ? ' (Completed)' : '')}
+                      title={task.name + (task.isHistorical ? ' (Completed)' : '') + (task.isOverdue ? ' (OVERDUE)' : '')}
                     >
+                      {task.isOverdue && <span className="overdue-tag">! </span>}
                       {task.name.length > 20 ? task.name.substring(0, 18) + '...' : task.name}
                     </div>
                   ))}

@@ -24,7 +24,9 @@ locals {
     "iam.googleapis.com",
     "firebase.googleapis.com", 
     "cloudresourcemanager.googleapis.com", 
-    "serviceusage.googleapis.com"
+    "serviceusage.googleapis.com",
+    "firestore.googleapis.com",
+    "firebasestorage.googleapis.com"
   ]
 }
 
@@ -35,17 +37,83 @@ resource "google_project_service" "gcp_services" {
   disable_on_destroy = false
 }
 
-# 4. Service Account for GitHub Actions
+# 2. Firebase Project Setup
+resource "google_firebase_project" "default" {
+  provider = google-beta
+  project  = var.project_id
+  depends_on = [google_project_service.gcp_services]
+}
+
+# 3. Firestore Database
+resource "google_firestore_database" "database" {
+  provider                    = google-beta
+  project                     = var.project_id
+  name                        = "(default)"
+  location_id                 = "us-central1"
+  # Note: us-central1 is often used for Firestore
+  type                        = "FIRESTORE_NATIVE"
+  concurrency_mode            = "OPTIMISTIC"
+  
+  depends_on = [google_firebase_project.default]
+}
+
+# 4. Firebase Web App
+resource "google_firebase_web_app" "pwa" {
+  provider     = google-beta
+  project      = var.project_id
+  display_name = "ScheduleIt PWA"
+
+  depends_on = [google_firebase_project.default]
+}
+
+# 5. Firestore Security Rules
+resource "google_firebaserules_ruleset" "firestore" {
+  provider = google-beta
+  project  = var.project_id
+  source {
+    files {
+      name    = "firestore.rules"
+      content = <<EOT
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    match /users/{userId}/{document=**} {
+      allow read, write: if request.auth != null && request.auth.uid == userId;
+    }
+  }
+}
+EOT
+    }
+  }
+  depends_on = [google_firestore_database.database]
+}
+
+resource "google_firebaserules_release" "firestore" {
+  provider     = google-beta
+  name         = "cloud.firestore"
+  ruleset_name = google_firebaserules_ruleset.firestore.name
+  project      = var.project_id
+  
+  depends_on = [google_firebaserules_ruleset.firestore]
+}
+
+# 6. Service Account for GitHub Actions
 resource "google_service_account" "github_action_sa" {
   project      = var.project_id
   account_id   = "github-actions-deployer"
   display_name = "GitHub Actions Firebase Deploy SA"
 }
 
-# 5. Grant the SA Firebase Hosting Admin Role
+# 6. Grant the SA necessary roles
 resource "google_project_iam_member" "sa_firebase_admin" {
   project = var.project_id
   role    = "roles/firebase.admin"
+  member  = "serviceAccount:${google_service_account.github_action_sa.email}"
+}
+
+resource "google_project_iam_member" "sa_firestore_user" {
+  project = var.project_id
+  role    = "roles/datastore.user"
   member  = "serviceAccount:${google_service_account.github_action_sa.email}"
 }
 
@@ -88,7 +156,25 @@ resource "google_service_account_iam_member" "workload_identity_user" {
   member             = "principalSet://iam.googleapis.com/${google_iam_workload_identity_pool.github_pool.name}/attribute.repository/${var.github_repo}"
 }
 
-# Output the WIF Provider snippet so the user can easily copy it to GitHub Actions
+# 10. Output the Firebase Config for .env
+data "google_firebase_web_app_config" "pwa_config" {
+  provider   = google-beta
+  project    = var.project_id
+  web_app_id = google_firebase_web_app.pwa.app_id
+}
+
+output "firebase_config_env" {
+  value = <<EOT
+VITE_FIREBASE_API_KEY=${data.google_firebase_web_app_config.pwa_config.api_key}
+VITE_FIREBASE_AUTH_DOMAIN=${var.project_id}.firebaseapp.com
+VITE_FIREBASE_PROJECT_ID=${var.project_id}
+VITE_FIREBASE_STORAGE_BUCKET=${var.project_id}.appspot.com
+VITE_FIREBASE_MESSAGING_SENDER_ID=${data.google_firebase_web_app_config.pwa_config.messaging_sender_id}
+VITE_FIREBASE_APP_ID=${google_firebase_web_app.pwa.app_id}
+EOT
+  description = "Copy this directly into your .env.local file"
+}
+
 output "workload_identity_provider" {
   value       = google_iam_workload_identity_pool_provider.github_provider.name
   description = "Plop this exactly into the GitHub Actions WIF field"
