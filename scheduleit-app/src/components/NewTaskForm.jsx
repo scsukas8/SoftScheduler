@@ -1,13 +1,29 @@
 import React, { useState } from 'react';
 import './NewTaskForm.css';
 
-export default function NewTaskForm({ onClose, onSave }) {
-  const [name, setName] = useState('');
-  const [frequencyInterval, setFrequencyInterval] = useState(1);
-  const [frequencyUnit, setFrequencyUnit] = useState('days');
-  const [wiggleRoom, setWiggleRoom] = useState(0);
-  const [firstDueDate, setFirstDueDate] = useState('');
-  const [color, setColor] = useState('var(--color-purple)'); // Default color
+export default function NewTaskForm({ onClose, onSave, onDelete, task = null }) {
+  const [name, setName] = useState(task?.name || '');
+  const [frequencyInterval, setFrequencyInterval] = useState(
+    task ? (task.interval_days % 7 === 0 ? task.interval_days / 7 : task.interval_days) : 1
+  );
+  const [frequencyUnit, setFrequencyUnit] = useState(
+    task ? (task.interval_days % 7 === 0 ? 'weeks' : 'days') : 'days'
+  );
+  const [wiggleRoom, setWiggleRoom] = useState(task?.wiggle_room || 0);
+  const [wiggleType, setWiggleType] = useState(task?.wiggle_type || 'symmetric');
+  
+  // Calculate first due date display for existing tasks
+  const getInitialDueDate = () => {
+    if (!task) return '';
+    const completedAt = (task.completed_at && typeof task.completed_at.toDate === 'function') 
+      ? task.completed_at.toDate() 
+      : new Date(task.completed_at);
+    const dueDate = new Date(completedAt.getTime() + task.interval_days * 24 * 60 * 60 * 1000);
+    return dueDate.toISOString().split('T')[0];
+  };
+  
+  const [firstDueDate, setFirstDueDate] = useState(getInitialDueDate());
+  const [color, setColor] = useState(task?.color || 'var(--color-purple)');
 
   const colors = [
     { name: 'Purple', val: 'var(--color-purple)' },
@@ -27,15 +43,16 @@ export default function NewTaskForm({ onClose, onSave }) {
       intervalDays *= 7;
     }
 
-    // Determine the completed_at date to trick the system into making the first due date right
+    // Determine the completed_at date based on the target first due date
     const targetDate = new Date(firstDueDate);
     const completedAt = new Date(targetDate.getTime() - intervalDays * 24 * 60 * 60 * 1000);
 
     onSave({
-      id: Date.now().toString(),
+      ...(task || {}), // Keep existing ID and other firestore meta if editing
       name,
       interval_days: intervalDays,
       wiggle_room: parseInt(wiggleRoom, 10),
+      wiggle_type: wiggleType,
       completed_at: completedAt.toISOString(),
       color
     });
@@ -45,7 +62,7 @@ export default function NewTaskForm({ onClose, onSave }) {
     <div className="modal-overlay">
       <div className="modal-content animate-slide-in">
         <div className="modal-header">
-          <h2>New Task</h2>
+          <h2>{task ? 'Edit Task' : 'New Task'}</h2>
           <button className="close-btn" onClick={onClose} aria-label="Close">
             <svg viewBox="0 0 24 24" width="24" height="24">
               <path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z" fill="currentColor"/>
@@ -54,6 +71,7 @@ export default function NewTaskForm({ onClose, onSave }) {
         </div>
 
         <form onSubmit={handleSubmit} className="task-form">
+          {/* ... existing form groups ... */}
           <div className="form-group">
             <label>Name:</label>
             <input 
@@ -88,7 +106,7 @@ export default function NewTaskForm({ onClose, onSave }) {
           </div>
 
           <div className="form-group">
-            <label>Wiggle Room: + or -</label>
+            <label>Wiggle Room:</label>
             <div className="frequency-inputs">
               <input 
                 type="number" 
@@ -97,7 +115,13 @@ export default function NewTaskForm({ onClose, onSave }) {
                 onChange={e => setWiggleRoom(e.target.value)}
                 style={{ width: '80px' }}
               />
-              <span>days</span>
+              <select 
+                value={wiggleType} 
+                onChange={e => setWiggleType(e.target.value)}
+              >
+                <option value="symmetric">± days</option>
+                <option value="late-only">+ days only</option>
+              </select>
             </div>
           </div>
 
@@ -127,9 +151,20 @@ export default function NewTaskForm({ onClose, onSave }) {
             </div>
           </div>
 
-          <button type="submit" className="submit-btn" style={{ '--btn-color': color }}>
-            ScheduleIt!
-          </button>
+          <div className="form-actions">
+            {task && (
+              <button 
+                type="button" 
+                className="delete-btn" 
+                onClick={() => onDelete(task.id)}
+              >
+                Delete Task
+              </button>
+            )}
+            <button type="submit" className="submit-btn" style={{ '--btn-color': color }}>
+              {task ? 'Update Task' : 'ScheduleIt!'}
+            </button>
+          </div>
         </form>
       </div>
     </div>

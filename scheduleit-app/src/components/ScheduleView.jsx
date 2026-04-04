@@ -1,7 +1,7 @@
 import React from 'react';
 import TaskCard from './TaskCard';
 
-export default function ScheduleView({ tasks, onCompleteTask }) {
+export default function ScheduleView({ tasks, onCompleteTask, onEditTask }) {
   // Sort tasks by time remaining (most overdue/urgent first)
   const sortedTasks = [...tasks].sort((a, b) => {
     // Robust date extraction for sorting
@@ -24,7 +24,7 @@ export default function ScheduleView({ tasks, onCompleteTask }) {
             key={task.id} 
             task={task} 
             onComplete={() => onCompleteTask(task.id)}
-            onViewDetails={(id) => console.log('View details', id)}
+            onEdit={onEditTask}
           />
         ))}
         {sortedTasks.length === 0 && (

@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import './App.css';
 import { auth, googleProvider } from './firebase';
 import { signInWithPopup, signOut, onAuthStateChanged } from 'firebase/auth';
-import { subscribeTasks, addTask, updateTask } from './services/dataService';
+import { subscribeTasks, addTask, updateTask, deleteTask } from './services/dataService';
 import ScheduleView from './components/ScheduleView';
 import CalendarView from './components/CalendarView';
 import NewTaskForm from './components/NewTaskForm';
@@ -14,6 +14,7 @@ function App() {
   const [tasksHistory, setTasksHistory] = useState([]);
   const [view, setView] = useState('schedule');
   const [showNewTaskForm, setShowNewTaskForm] = useState(false);
+  const [editingTask, setEditingTask] = useState(null);
   const [isDark, setIsDark] = useState(() => {
     return localStorage.getItem('scheduleit-theme') === 'dark' || 
            (!localStorage.getItem('scheduleit-theme') && window.matchMedia('(prefers-color-scheme: dark)').matches);
@@ -79,11 +80,36 @@ function App() {
     }
   };
 
-  const handleAddTask = async (newTask) => {
+  const handleEditTask = (task) => {
+    setEditingTask(task);
+    setShowNewTaskForm(true);
+  };
+
+  const handleSaveTask = async (taskData) => {
     if (user) {
       saveHistory();
-      await addTask(user.uid, newTask);
+      if (editingTask) {
+        // Remove the 'id' from the update payload since Firestore update takes it separately
+        const { id, ...data } = taskData;
+        await updateTask(user.uid, id, data);
+      } else {
+        // For new tasks, we let Firestore generate the ID or use the one from NewTaskForm
+        // But our dataService uses addDoc which generates a new ID.
+        // We'll strip the placeholder ID from the form if any.
+        const { id, ...data } = taskData;
+        await addTask(user.uid, data);
+      }
       setShowNewTaskForm(false);
+      setEditingTask(null);
+    }
+  };
+
+  const handleDeleteTask = async (id) => {
+    if (user && window.confirm('Are you sure you want to delete this task?')) {
+      saveHistory();
+      await deleteTask(user.uid, id);
+      setShowNewTaskForm(false);
+      setEditingTask(null);
     }
   };
 
@@ -99,7 +125,10 @@ function App() {
     if (completionDate) {
       newCompletedAt = new Date(completionDate);
     } else {
-      const currentCompletedAt = new Date(task.completed_at);
+      // Standard logic: toggle to next due date or today
+      const currentCompletedAt = (task.completed_at && typeof task.completed_at.toDate === 'function') 
+        ? task.completed_at.toDate() 
+        : new Date(task.completed_at);
       const currentTargetDate = new Date(currentCompletedAt.getTime() + task.interval_days * 24 * 60 * 60 * 1000);
       
       if (currentTargetDate > new Date()) {
@@ -174,9 +203,9 @@ function App() {
 
       <main className="app-content">
         {view === 'schedule' ? (
-          <ScheduleView tasks={tasks} onCompleteTask={handleCompleteTask} />
+          <ScheduleView tasks={tasks} onCompleteTask={handleCompleteTask} onEditTask={handleEditTask} />
         ) : (
-          <CalendarView tasks={tasks} onCompleteTask={handleCompleteTask} />
+          <CalendarView tasks={tasks} onCompleteTask={handleCompleteTask} onEditTask={handleEditTask} />
         )}
       </main>
 
@@ -188,14 +217,19 @@ function App() {
         </button>
       )}
 
-      <button className="fab-add" onClick={() => setShowNewTaskForm(true)}>
+      <button className="fab-add" onClick={() => { setEditingTask(null); setShowNewTaskForm(true); }}>
         <svg viewBox="0 0 24 24" width="32" height="32">
           <path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z" fill="currentColor"/>
         </svg>
       </button>
 
       {showNewTaskForm && (
-        <NewTaskForm onClose={() => setShowNewTaskForm(false)} onSave={handleAddTask} />
+        <NewTaskForm 
+          task={editingTask}
+          onClose={() => { setShowNewTaskForm(false); setEditingTask(null); }} 
+          onSave={handleSaveTask} 
+          onDelete={handleDeleteTask}
+        />
       )}
     </div>
   );

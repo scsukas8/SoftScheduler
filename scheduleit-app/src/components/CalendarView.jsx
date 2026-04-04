@@ -114,7 +114,7 @@ function RoundaboutMenu({ tasks, position, onClose, onComplete }) {
   );
 }
 
-export default function CalendarView({ tasks, onCompleteTask }) {
+export default function CalendarView({ tasks, onCompleteTask, onEditTask }) {
   const [activeDay, setActiveDay] = useState(null); // { id, x, y }
 
   // 14 day view (7 columns, 2 rows) - Starting 3 days in the past
@@ -143,11 +143,12 @@ export default function CalendarView({ tasks, onCompleteTask }) {
 
       const daysRemaining = calculateTimeRemaining(completedAt, task.interval_days);
       const wiggle = parseInt(task.wiggle_room || 0, 10);
+      const isLateOnly = task.wiggle_type === 'late-only';
       
       // If more than 3 days overdue, it disappears
       if (daysRemaining < -3) return;
 
-      const startDayIdx = 3 + daysRemaining - wiggle;
+      const startDayIdx = isLateOnly ? (3 + daysRemaining) : (3 + daysRemaining - wiggle);
       const endDayIdx = 3 + daysRemaining + wiggle;
       
       const completedDayStr = completedAt.toISOString().split('T')[0];
@@ -213,9 +214,14 @@ export default function CalendarView({ tasks, onCompleteTask }) {
                       className={`task-label ${task.isHistorical ? 'historical' : ''} ${task.isOverdue ? 'overdue' : ''}`} 
                       style={{ 
                         backgroundColor: task.color,
-                        opacity: task.isHistorical ? 0.35 : 1
+                        opacity: task.isHistorical ? 0.35 : 1,
+                        cursor: 'pointer'
                       }}
                       title={task.name + (task.isHistorical ? ' (Completed)' : '') + (task.isOverdue ? ' (OVERDUE)' : '')}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onEditTask(task);
+                      }}
                     >
                       {task.isOverdue && <span className="overdue-tag">! </span>}
                       {task.name.length > 20 ? task.name.substring(0, 18) + '...' : task.name}

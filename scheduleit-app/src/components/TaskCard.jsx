@@ -1,7 +1,7 @@
 import { calculateTimeRemaining, formatTimeRemaining } from '../utils/dateUtils';
 import './TaskCard.css'; // Add basic styling definitions here
 
-export default function TaskCard({ task, onComplete, onViewDetails }) {
+export default function TaskCard({ task, onComplete, onEdit }) {
   const daysRemaining = calculateTimeRemaining(task.completed_at, task.interval_days);
   const timeString = formatTimeRemaining(daysRemaining);
 
@@ -34,12 +34,12 @@ export default function TaskCard({ task, onComplete, onViewDetails }) {
           </svg>
         </button>
         <button 
-          className="action-btn details-btn" 
-          onClick={() => onViewDetails(task.id)}
-          aria-label="View Details"
+          className="action-btn edit-btn" 
+          onClick={() => onEdit(task)}
+          aria-label="Edit Task"
         >
-          <svg viewBox="0 0 24 24" width="24" height="24">
-            <path d="M12 4l-1.41 1.41L16.17 11H4v2h12.17l-5.58 5.59L12 20l8-8z" fill="currentColor"/>
+          <svg viewBox="0 0 24 24" width="22" height="22">
+            <path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04a0.996 0.996 0 0 0 0-1.41l-2.34-2.34a0.996 0.996 0 0 0-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z" fill="currentColor"/>
           </svg>
         </button>
       </div>
