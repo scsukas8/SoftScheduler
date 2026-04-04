@@ -21,20 +21,27 @@
   border-bottom: 1px solid var(--border-color);
   display: flex;
   flex-direction: column;
-  background-color: transparent;
-  transition: background-color 0.2s;
+  background-color: rgba(255, 255, 255, 0.03); /* Light background for all active/future days */
+  transition: opacity 0.2s, background-color 0.2s;
 }
 
 .calendar-cell.has-tasks .cell-hitbox {
   cursor: pointer;
 }
 
-.calendar-cell.has-tasks:hover {
-  background-color: rgba(168, 85, 247, 0.05);
+.calendar-cell.today {
+  border-color: var(--accent-pink);
+  box-shadow: 0 0 10px rgba(255, 64, 129, 0.2);
+  background-color: rgba(168, 85, 247, 0.1); /* Slightly more purple for today */
 }
 
-.calendar-cell.today {
-  background-color: rgba(168, 85, 247, 0.1); /* light purple bg */
+.calendar-cell.past {
+  opacity: 0.5;
+  background-color: var(--card-bg); /* Darker/Greyed out */
+}
+
+.calendar-cell.has-tasks .cell-hitbox {
+  cursor: pointer;
 }
 
 .cell-hitbox {

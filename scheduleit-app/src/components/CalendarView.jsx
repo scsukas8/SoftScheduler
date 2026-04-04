@@ -117,13 +117,13 @@ function RoundaboutMenu({ tasks, position, onClose, onComplete }) {
 export default function CalendarView({ tasks, onCompleteTask }) {
   const [activeDay, setActiveDay] = useState(null); // { id, x, y }
 
-  // 14 day view (7 columns, 2 rows)
+  // 14 day view (7 columns, 2 rows) - Starting 3 days in the past
   const days = useMemo(() => {
     const today = new Date();
     today.setHours(0,0,0,0);
     return Array.from({ length: 14 }).map((_, i) => {
       const d = new Date(today);
-      d.setDate(d.getDate() + i);
+      d.setDate(d.getDate() - 3 + i);
       return d;
     });
   }, []);
@@ -134,27 +134,35 @@ export default function CalendarView({ tasks, onCompleteTask }) {
     days.forEach(d => map[d.toISOString()] = []);
 
     tasks.forEach(task => {
-      const daysRemaining = calculateTimeRemaining(task.completed_at, task.interval_days);
+      // Robust date extraction (handles Firestore Timestamps)
+      const completedAt = (task.completed_at && typeof task.completed_at.toDate === 'function') 
+        ? task.completed_at.toDate() 
+        : new Date(task.completed_at || Date.now());
+
+      if (isNaN(completedAt.getTime())) return;
+
+      const daysRemaining = calculateTimeRemaining(completedAt, task.interval_days);
       const wiggle = parseInt(task.wiggle_room || 0, 10);
       
-      const startDayNum = daysRemaining - wiggle;
-      const endDayNum = daysRemaining + wiggle;
+      // If more than 3 days overdue, it disappears
+      if (daysRemaining < -3) return;
+
+      const startDayIdx = 3 + daysRemaining - wiggle;
+      const endDayIdx = 3 + daysRemaining + wiggle;
       
-      const completedDayStr = new Date(task.completed_at).toISOString().split('T')[0];
-      const isActuallyOverdue = daysRemaining < 0;
+      const completedDayStr = completedAt.toISOString().split('T')[0];
 
       days.forEach((day, index) => {
         const dStr = day.toISOString().split('T')[0];
         
         const isHistorical = (dStr === completedDayStr);
-        const isActive = (index >= startDayNum && index <= endDayNum);
+        const isActive = (index >= startDayIdx && index <= endDayIdx);
         
-        // If it's active today OR it was completed today, show it on the map
-        if (isActive || isHistorical || (index === 0 && isActuallyOverdue)) {
+        if (isActive || isHistorical) {
           map[day.toISOString()].push({ 
             ...task, 
             isHistorical: !isActive && isHistorical,
-            isOverdue: index === 0 && isActuallyOverdue
+            isOverdue: daysRemaining < 0 && index === (3 + daysRemaining)
           });
         }
       });
@@ -168,15 +176,16 @@ export default function CalendarView({ tasks, onCompleteTask }) {
       
       <div className="calendar-grid-7x2">
         {days.map((day, index) => {
-          const isToday = index === 0;
           const dayId = day.toISOString();
           const dayTasks = dayTasksMap[dayId] || [];
+          const isToday = day.toDateString() === new Date().toDateString();
+          const isPast = day < new Date(new Date().setHours(0,0,0,0));
           const activeTasks = dayTasks.filter(t => !t.isHistorical);
-
+          
           return (
             <div 
-              key={dayId} 
-              className={`calendar-cell ${isToday ? 'today' : ''} ${activeTasks.length > 0 ? 'has-tasks' : ''}`}
+              key={day.toISOString()} 
+              className={`calendar-cell ${isToday ? 'today' : ''} ${isPast ? 'past' : ''} ${activeTasks.length > 0 ? 'has-tasks' : ''}`}
             >
               <div 
                 className="cell-hitbox" 

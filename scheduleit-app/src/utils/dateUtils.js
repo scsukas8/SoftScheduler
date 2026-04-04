@@ -1,9 +1,14 @@
 export function calculateTimeRemaining(completedAt, intervalDays) {
-  const completedDate = new Date(completedAt);
-  const targetDate = new Date(completedDate.getTime() + intervalDays * 24 * 60 * 60 * 1000);
+  // Handle Firestore Timestamps or strings
+  const completedDate = (completedAt && typeof completedAt.toDate === 'function') 
+    ? completedAt.toDate() 
+    : new Date(completedAt || Date.now());
+
+  if (isNaN(completedDate.getTime())) return 0;
+
+  const targetDate = new Date(completedDate.getTime() + (intervalDays || 1) * 24 * 60 * 60 * 1000);
   const now = new Date();
   
-  // Need difference in days
   const diffTime = targetDate - now;
   const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
   
