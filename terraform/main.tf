@@ -104,7 +104,7 @@ resource "google_service_account" "github_action_sa" {
   display_name = "GitHub Actions Firebase Deploy SA"
 }
 
-# 6. Grant the SA necessary roles
+# 7. Grant the SA necessary roles
 resource "google_project_iam_member" "sa_firebase_admin" {
   project = var.project_id
   role    = "roles/firebase.admin"
@@ -117,7 +117,19 @@ resource "google_project_iam_member" "sa_firestore_user" {
   member  = "serviceAccount:${google_service_account.github_action_sa.email}"
 }
 
-# 6. Workload Identity Federation Setup
+resource "google_project_iam_member" "sa_service_usage" {
+  project = var.project_id
+  role    = "roles/serviceusage.serviceUsageConsumer"
+  member  = "serviceAccount:${google_service_account.github_action_sa.email}"
+}
+
+resource "google_project_iam_member" "sa_firebase_rules" {
+  project = var.project_id
+  role    = "roles/firebaserules.admin"
+  member  = "serviceAccount:${google_service_account.github_action_sa.email}"
+}
+
+# 8. Workload Identity Federation Setup
 # Create the Pool
 resource "google_iam_workload_identity_pool" "github_pool" {
   provider                  = google-beta
@@ -149,7 +161,7 @@ resource "google_iam_workload_identity_pool_provider" "github_provider" {
   }
 }
 
-# 7. Bind the WIF Provider to the Service Account
+# 9. Bind the WIF Provider to the Service Account
 resource "google_service_account_iam_member" "workload_identity_user" {
   service_account_id = google_service_account.github_action_sa.name
   role               = "roles/iam.workloadIdentityUser"
