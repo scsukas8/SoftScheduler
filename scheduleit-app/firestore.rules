@@ -7,10 +7,10 @@ service cloud.firestore {
         request.resource.data.name is string &&
         request.resource.data.name.size() >= 1 &&
         request.resource.data.name.size() <= 100 &&
-        request.resource.data.wiggle_room is int &&
+        request.resource.data.wiggle_room is number &&
         request.resource.data.wiggle_room >= 0 &&
         request.resource.data.wiggle_room <= 7 &&
-        request.resource.data.interval_days is int &&
+        request.resource.data.interval_days is number &&
         request.resource.data.interval_days >= 1 &&
         request.resource.data.interval_days <= 1825; // 5 years
     }

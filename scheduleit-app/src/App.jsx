@@ -104,10 +104,11 @@ function App() {
   };
 
   const handleSaveTask = async (taskData) => {
-    if (user) {
+    if (!user) return;
+    
+    try {
       saveHistory();
       if (editingTask) {
-        // Remove the 'id' from the update payload since Firestore update takes it separately
         const { id, ...data } = taskData;
         await updateTask(user.uid, id, data);
       } else {
@@ -116,13 +117,18 @@ function App() {
           return;
         }
 
-        // For new tasks, we let Firestore generate the ID or use the one from NewTaskForm
         const { id, ...data } = taskData;
         await addTask(user.uid, data);
         setCreationStats(prev => ({ ...prev, count: prev.count + 1 }));
       }
+    } catch (error) {
+      console.error("Critical Task Save Error:", error);
+      alert(`Save failed: ${error.message || "Connectivity issue"}. The task may still appear locally but won't be saved until you're online.`);
+    } finally {
+      // Always close form and clear editing state to avoid UI hang
       setShowNewTaskForm(false);
       setEditingTask(null);
+      setPrefillDate(null);
     }
   };
 

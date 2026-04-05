@@ -55,7 +55,7 @@ export default function NewTaskForm({ onClose, onSave, onDelete, task = null, in
       return;
     }
 
-    let intervalDays = parseInt(frequencyInterval, 10);
+    let intervalDays = parseInt(frequencyInterval, 10) || 1;
     if (frequencyUnit === 'weeks') {
       intervalDays *= 7;
     }
@@ -66,7 +66,7 @@ export default function NewTaskForm({ onClose, onSave, onDelete, task = null, in
       return;
     }
 
-    const wiggle = parseInt(wiggleRoom, 10);
+    const wiggle = parseInt(wiggleRoom, 10) || 0;
     if (wiggle > 7) {
       setError('Wiggle room cannot exceed 7 days.');
       return;
@@ -135,8 +135,15 @@ export default function NewTaskForm({ onClose, onSave, onDelete, task = null, in
                   value={frequencyInterval} 
                   onChange={e => {
                     const maxVal = frequencyUnit === 'weeks' ? 260 : 1825;
-                    const val = parseInt(e.target.value, 10) || 0;
-                    setFrequencyInterval(Math.min(maxVal, Math.max(0, val)));
+                    const val = e.target.value;
+                    if (val === '') {
+                      setFrequencyInterval('');
+                    } else {
+                      const parsed = parseInt(val, 10);
+                      if (!isNaN(parsed)) {
+                        setFrequencyInterval(Math.min(maxVal, Math.max(0, parsed)));
+                      }
+                    }
                   }}
                   style={{ width: '80px' }}
                 />
@@ -165,8 +172,15 @@ export default function NewTaskForm({ onClose, onSave, onDelete, task = null, in
                 max="7"
                 value={wiggleRoom} 
                 onChange={e => {
-                  const val = parseInt(e.target.value, 10) || 0;
-                  setWiggleRoom(Math.min(7, Math.max(0, val)));
+                  const val = e.target.value;
+                  if (val === '') {
+                    setWiggleRoom('');
+                  } else {
+                    const parsed = parseInt(val, 10);
+                    if (!isNaN(parsed)) {
+                      setWiggleRoom(Math.min(7, Math.max(0, parsed)));
+                    }
+                  }
                 }}
                 style={{ width: '80px' }}
               />
