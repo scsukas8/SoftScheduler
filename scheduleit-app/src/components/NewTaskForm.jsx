@@ -72,7 +72,9 @@ export default function NewTaskForm({ onClose, onSave, onDelete, task = null, in
     }
 
     // Determine the completed_at date based on the target next due date
-    const targetDate = new Date(nextDueDate);
+    // Use local time parsing to avoid UTC midnight shifts
+    const [year, month, day] = nextDueDate.split('-').map(Number);
+    const targetDate = new Date(year, month - 1, day);
     const completedAt = new Date(targetDate.getTime() - intervalDays * 24 * 60 * 60 * 1000);
 
     onSave({

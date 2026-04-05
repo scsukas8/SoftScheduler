@@ -11,30 +11,57 @@ function RoundaboutMenu({ tasks, position, onClose, onComplete, onAddTask }) {
   // Spring for the central drag knob
   const [{ x, y }, api] = useSpring(() => ({ x: 0, y: 0 }));
 
-  const RADIUS = 80;
+  // Detect edge cases for mobile clipping
+  const viewWidth = window.innerWidth;
+  const isRightEdge = position.x > viewWidth * 0.7;
+  const isLeftEdge = position.x < viewWidth * 0.3;
+  const isMobile = viewWidth < 600;
+  const RADIUS = isMobile ? 65 : 80;
 
-  // Calculate bubble positions
+  // Calculate positions for task bubbles and the "+" creation button
   const bubblePositions = useMemo(() => {
-    const total = tasks.length + 1; // +1 for the plus button
+    const numTasks = tasks.length;
+    const total = numTasks + 1;
+    
+    // JS Math: 0=Right, PI/2=Bottom, PI=Left, 3/2 PI=Top
+    const PLUS_ANGLE = Math.PI * 0.5; // Fixed at 6 o'clock
+
+    // If not near screen edges, distribute in a balanced full circle
+    if (!isLeftEdge && !isRightEdge) {
+      const positions = tasks.map((task, i) => {
+        const angle = PLUS_ANGLE + ((i + 1) * (Math.PI * 2)) / total;
+        return { id: task.id, task, x: Math.cos(angle) * RADIUS, y: Math.sin(angle) * RADIUS };
+      });
+      positions.push({ id: 'create', isCreate: true, x: Math.cos(PLUS_ANGLE) * RADIUS, y: Math.sin(PLUS_ANGLE) * RADIUS });
+      return positions;
+    }
+    
+    // Edge Case: 180-degree sweep from Plus (Bottom) to Top (270 deg)
+    // Sweep direction (CW vs CCW) ensures bubbles stay within the viewport
+    const sweepDir = isLeftEdge ? -1 : 1; 
+    const sweepArc = Math.PI;
+    
     const positions = tasks.map((task, i) => {
-      // Offset by 1 to leave room for the plus button at 0
-      const angle = ((i + 1) * (Math.PI * 2)) / total;
+      // Offset from the Plus button at index 0
+      const angle = PLUS_ANGLE + (sweepDir * sweepArc * (i + 1) / (total - 1));
       return {
+        id: task.id,
+        task,
         x: Math.cos(angle) * RADIUS,
-        y: Math.sin(angle) * RADIUS,
-        task
+        y: Math.sin(angle) * RADIUS
       };
     });
 
-    // Add the plus button at 0 degrees (right side)
+    // Add Create button at the 6 o'clock anchor
     positions.push({
-      x: RADIUS,
-      y: 0,
-      isCreate: true
+      id: 'create',
+      isCreate: true,
+      x: Math.cos(PLUS_ANGLE) * RADIUS,
+      y: Math.sin(PLUS_ANGLE) * RADIUS
     });
     
     return positions;
-  }, [tasks]);
+  }, [tasks, isLeftEdge, isRightEdge, RADIUS]);
 
   const bind = useDrag(({ down, offset: [ox, oy], tap }) => {
     // Only process if it's not a simple tap

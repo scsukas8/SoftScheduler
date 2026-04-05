@@ -212,24 +212,37 @@
 }
 
 @media (max-width: 768px) {
+  .calendar-view {
+    width: 100%;
+    margin: 0;
+  }
+  
   .calendar-grid-7x2 {
-    /* Allow the grid to squeeze tightly on mobile without scrolling */
+    display: grid !important;
+    width: 100% !important;
     min-width: unset;
-    min-height: 300px;
-    grid-template-columns: repeat(3, 1fr);
+    min-height: unset;
+    grid-template-columns: repeat(3, 1fr) !important;
     grid-template-rows: auto;
+    border-radius: var(--radius-sm); /* Tighten for mobile */
   }
   
   .cell-hitbox {
-    padding: 6px;
-    min-height: 80px;
+    padding: 10px 4px;
+    min-height: 110px;
   }
   
   .day-name { font-size: 0.75rem; }
-  .day-num { font-size: 1rem; }
+  .day-num { font-size: 1.1rem; }
   
   .task-label {
-    font-size: 0.65rem;
-    padding: 2px;
+    font-size: 0.6rem;
+    padding: 1px 4px;
+    margin-bottom: 2px;
+    border-radius: 2px;
+    display: block; /* Force to take full width */
+    max-width: 100%;
   }
 }
+
+/* Remove 480px 2-column fallback as per user request */
