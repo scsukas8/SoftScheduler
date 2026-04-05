@@ -16,18 +16,18 @@ function App() {
   const [showNewTaskForm, setShowNewTaskForm] = useState(false);
   const [editingTask, setEditingTask] = useState(null);
   const [isDark, setIsDark] = useState(() => {
-    return localStorage.getItem('scheduleit-theme') === 'dark' || 
-           (!localStorage.getItem('scheduleit-theme') && window.matchMedia('(prefers-color-scheme: dark)').matches);
+    return localStorage.getItem('softschedule-theme') === 'dark' || 
+           (!localStorage.getItem('softschedule-theme') && window.matchMedia('(prefers-color-scheme: dark)').matches);
   });
 
   // Theme Sync
   useEffect(() => {
     if (isDark) {
       document.documentElement.classList.add('dark');
-      localStorage.setItem('scheduleit-theme', 'dark');
+      localStorage.setItem('softschedule-theme', 'dark');
     } else {
       document.documentElement.classList.remove('dark');
-      localStorage.setItem('scheduleit-theme', 'light');
+      localStorage.setItem('softschedule-theme', 'light');
     }
   }, [isDark]);
 
@@ -140,7 +140,7 @@ function App() {
   };
 
   if (loading) {
-    return <div className="loading-screen">Loading ScheduleIt...</div>;
+    return <div className="loading-screen">Loading SoftSchedule...</div>;
   }
 
   if (!user) {
@@ -158,7 +158,7 @@ function App() {
               <path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/>
             </svg>
           </div>
-          <h1>ScheduleIt</h1>
+          <h1>SoftSchedule</h1>
           <p>Soft scheduling for a calmer life.</p>
           <button className="login-btn" onClick={handleLogin}>
             Sign in with Google
@@ -182,7 +182,7 @@ function App() {
               </defs>
               <path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/>
             </svg>
-            <h1>ScheduleIt</h1>
+            <h1>SoftSchedule</h1>
           </div>
         </div>
 

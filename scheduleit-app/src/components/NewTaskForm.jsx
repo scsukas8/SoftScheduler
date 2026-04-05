@@ -162,7 +162,7 @@ export default function NewTaskForm({ onClose, onSave, onDelete, task = null }) 
               </button>
             )}
             <button type="submit" className="submit-btn" style={{ '--btn-color': color }}>
-              {task ? 'Update Task' : 'ScheduleIt!'}
+              {task ? 'Update Task' : 'SoftSchedule!'}
             </button>
           </div>
         </form>
