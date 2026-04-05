@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { useSpring, animated } from '@react-spring/web';
 import './NewTaskForm.css';
 
 export default function NewTaskForm({ onClose, onSave, onDelete, task = null, initialDueDate = '' }) {
@@ -88,9 +89,15 @@ export default function NewTaskForm({ onClose, onSave, onDelete, task = null, in
     });
   };
 
+  const spring = useSpring({
+    from: { opacity: 0, transform: 'scale(0.8)' },
+    to: { opacity: 1, transform: 'scale(1)' },
+    config: { tension: 200, friction: 15 }
+  });
+
   return (
     <div className="modal-overlay">
-      <div className="modal-content animate-slide-in">
+      <animated.div style={spring} className="modal-content">
         <div className="modal-header">
           <h2>{task ? 'Edit Task' : 'New Task'}</h2>
           <button className="close-btn" onClick={onClose} aria-label="Close">
@@ -214,7 +221,7 @@ export default function NewTaskForm({ onClose, onSave, onDelete, task = null, in
             </button>
           </div>
         </form>
-      </div>
+      </animated.div>
     </div>
   );
 }

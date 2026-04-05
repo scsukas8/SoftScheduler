@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useMemo, useState, useEffect, useRef } from 'react';
 import { useSpring, animated, to } from '@react-spring/web';
 import { useDrag } from '@use-gesture/react';
 import { calculateTimeRemaining } from '../utils/dateUtils';
@@ -7,6 +7,7 @@ import './CalendarView.css';
 // The popup gesture menu for a specific day
 function RoundaboutMenu({ tasks, position, onClose, onComplete, onAddTask }) {
   const [activeTask, setActiveTask] = useState(null);
+  const [selectedId, setSelectedId] = useState(null);
   
   // Spring for the central drag knob
   const [{ x, y }, api] = useSpring(() => ({ x: 0, y: 0 }));
@@ -63,6 +64,13 @@ function RoundaboutMenu({ tasks, position, onClose, onComplete, onAddTask }) {
     return positions;
   }, [tasks, isLeftEdge, isRightEdge, RADIUS]);
 
+  // Entrance animation for the entire menu
+  const introSpring = useSpring({
+    from: { opacity: 0, transform: 'scale(0.5)' },
+    to: { opacity: 1, transform: 'scale(1)' },
+    config: { mass: 1, tension: 180, friction: 14 }
+  });
+
   const bind = useDrag(({ down, offset: [ox, oy], tap }) => {
     // Only process if it's not a simple tap
     if (tap) return; 
@@ -84,12 +92,15 @@ function RoundaboutMenu({ tasks, position, onClose, onComplete, onAddTask }) {
 
     if (!down) {
       if (closest && Math.sqrt(ox*ox + oy*oy) > 30) {
-        if (closest === 'create') {
-          onAddTask();
-        } else {
-          onComplete(closest);
-        }
-        onClose();
+        setSelectedId(closest);
+        setTimeout(() => {
+          if (closest === 'create') {
+            onAddTask();
+          } else {
+            onComplete(closest);
+          }
+          onClose();
+        }, 750);
         return;
       }
       // Snap back if unreleased empty
@@ -113,50 +124,117 @@ function RoundaboutMenu({ tasks, position, onClose, onComplete, onAddTask }) {
       }}
       style={{ touchAction: 'none' }}
     >
-      <div 
+      <animated.div 
         className="roundabout-container" 
         onClick={(e) => e.stopPropagation()}
-        style={{ left: position.x, top: position.y }}
+        style={{ 
+          ...introSpring,
+          left: position.x, 
+          top: position.y 
+        }}
       >
         {/* Render the bubbles */}
         {bubblePositions.map((bp) => {
           const id = bp.isCreate ? 'create' : bp.task.id;
+          const isActive = activeTask === id;
+          const isSelected = selectedId === id;
+          const isFadingOut = selectedId && !isSelected;
+          
           return (
-            <div
+            <Bubble 
               key={id}
-              className={`roundabout-bubble ${activeTask === id ? 'active' : ''} ${bp.isCreate ? 'create-bubble' : ''}`}
-              style={{ 
-                transform: `translate(calc(-50% + ${bp.x}px), calc(-50% + ${bp.y}px)) scale(${activeTask === id ? 1.7 : 1})`,
-                backgroundColor: bp.isCreate ? 'var(--color-purple)' : bp.task.color 
-              }}
+              bp={bp}
+              isActive={isActive}
+              isSelected={isSelected}
+              isFadingOut={isFadingOut}
               onClick={() => {
-                if (bp.isCreate) {
-                  onAddTask();
-                } else {
-                  onComplete(bp.task.id);
-                }
-                onClose();
+                setSelectedId(id);
+                setTimeout(() => {
+                  if (bp.isCreate) onAddTask();
+                  else onComplete(bp.task.id);
+                  onClose();
+                }, 750);
               }}
-              onMouseEnter={() => setActiveTask(id)}
-              onMouseLeave={() => setActiveTask(null)}
-            >
-              <span>{bp.isCreate ? '+' : bp.task.name.substring(0, 1).toUpperCase()}</span>
-              <div className="bubble-tooltip">{bp.isCreate ? 'Add Task' : bp.task.name}</div>
-            </div>
+            />
           );
         })}
-        
+
         {/* The central draggable knob */}
         <animated.div 
           className="roundabout-knob"
           style={{ 
+            opacity: selectedId ? 0 : 1, // Fade knob out during pop
             transform: to([x, y], (kx, ky) => `translate(calc(-50% + ${kx}px), calc(-50% + ${ky}px))`)
           }}
         >
           <div className="knob-inner" />
         </animated.div>
-      </div>
+      </animated.div>
     </div>
+  );
+}
+
+/**
+ * Individual animated bubble component
+ * Handles the "pop" (scaling) effect when targeted or selected
+ */
+function Bubble({ bp, isActive, isSelected, isFadingOut, onClick }) {
+  // Use a ref to ensure the selection sequence only fires exactly once per selection
+  const hasStartedSelectionRef = useRef(false);
+  
+  // Use imperative api to ensure the selection sequence is never interrupted
+  const [style, api] = useSpring(() => ({
+    transform: `translate(calc(-50% + ${bp.x}px), calc(-50% + ${bp.y}px)) scale(1)`,
+    opacity: 1,
+    config: { tension: 350, friction: 12 }
+  }));
+
+  useEffect(() => {
+    if (isSelected) {
+      // Guard against re-renders restarting the animation
+      if (!hasStartedSelectionRef.current) {
+        hasStartedSelectionRef.current = true;
+        // STAGE 1: BOLD GROW
+        api.start({
+          transform: `translate(calc(-50% + ${bp.x}px), calc(-50% + ${bp.y}px)) scale(2.2)`,
+          opacity: 1,
+          config: { tension: 800, friction: 20 },
+          onRest: () => {
+            // STAGE 2: RAPID BURST (SHRINK)
+            api.start({
+              transform: `translate(calc(-50% + ${bp.x}px), calc(-50% + ${bp.y}px)) scale(0.1)`,
+              opacity: 0,
+              config: { tension: 1200, friction: 25 }
+            });
+          }
+        });
+      }
+    } else {
+      // Reset the guard when the bubble is no longer selected
+      hasStartedSelectionRef.current = false;
+      // Regular hover/swipe scaling
+      api.start({
+        transform: `translate(calc(-50% + ${bp.x}px), calc(-50% + ${bp.y}px)) scale(${isActive ? 1.4 : 1})`,
+        opacity: isFadingOut ? 0 : 1,
+        config: { tension: 350, friction: 12 }
+      });
+    }
+  }, [isSelected, isActive, isFadingOut, bp.x, bp.y, api]);
+
+  return (
+    <animated.div
+      className={`roundabout-bubble ${isActive ? 'active' : ''} ${bp.isCreate ? 'create-bubble' : ''} ${isSelected ? 'selected' : ''}`}
+      style={{ 
+        ...style,
+        backgroundColor: bp.isCreate ? 'var(--color-purple)' : bp.task.color,
+        zIndex: isSelected ? 1000 : 1,
+        pointerEvents: (isFadingOut || isSelected) ? 'none' : 'auto'
+      }}
+      onClick={isSelected ? null : onClick}
+    >
+      <span>{bp.isCreate ? '+' : bp.task.name.substring(0, 1).toUpperCase()}</span>
+      <div className="bubble-tooltip">{bp.isCreate ? 'Add Task' : bp.task.name}</div>
+    </animated.div>
   );
 }
 
