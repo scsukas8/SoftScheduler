@@ -15,6 +15,7 @@ function App() {
   const [view, setView] = useState('schedule');
   const [showNewTaskForm, setShowNewTaskForm] = useState(false);
   const [editingTask, setEditingTask] = useState(null);
+  const [prefillDate, setPrefillDate] = useState(null);
   const [isDark, setIsDark] = useState(() => {
     return localStorage.getItem('softschedule-theme') === 'dark' || 
            (!localStorage.getItem('softschedule-theme') && window.matchMedia('(prefers-color-scheme: dark)').matches);
@@ -96,8 +97,9 @@ function App() {
     }
   };
 
-  const handleEditTask = (task) => {
+  const handleEditTask = (task, prefill = null) => {
     setEditingTask(task);
+    setPrefillDate(prefill);
     setShowNewTaskForm(true);
   };
 
@@ -237,7 +239,7 @@ function App() {
         </button>
       )}
 
-      <button className="fab-add" onClick={() => { setEditingTask(null); setShowNewTaskForm(true); }}>
+      <button className="fab-add" onClick={() => handleEditTask()}>
         <svg viewBox="0 0 24 24" width="32" height="32">
           <path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z" fill="currentColor"/>
         </svg>
@@ -246,8 +248,13 @@ function App() {
       {showNewTaskForm && (
         <NewTaskForm 
           task={editingTask}
-          onClose={() => { setShowNewTaskForm(false); setEditingTask(null); }} 
-          onSave={handleSaveTask} 
+          initialDueDate={prefillDate}
+          onClose={() => {
+            setShowNewTaskForm(false);
+            setEditingTask(null);
+            setPrefillDate(null);
+          }}
+          onSave={handleSaveTask}
           onDelete={handleDeleteTask}
         />
       )}
@@ -256,4 +263,3 @@ function App() {
 }
 
 export default App;
-

@@ -156,6 +156,12 @@
   outline: 3px solid white;
 }
 
+.create-bubble {
+  background: linear-gradient(135deg, var(--color-purple), var(--color-pink)) !important;
+  font-size: 1.5rem !important;
+  z-index: 105 !important;
+}
+
 .bubble-tooltip {
   position: absolute;
   top: -30px;

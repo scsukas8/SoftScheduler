@@ -5,7 +5,7 @@ import { calculateTimeRemaining } from '../utils/dateUtils';
 import './CalendarView.css';
 
 // The popup gesture menu for a specific day
-function RoundaboutMenu({ tasks, position, onClose, onComplete }) {
+function RoundaboutMenu({ tasks, position, onClose, onComplete, onAddTask }) {
   const [activeTask, setActiveTask] = useState(null);
   
   // Spring for the central drag knob
@@ -15,17 +15,25 @@ function RoundaboutMenu({ tasks, position, onClose, onComplete }) {
 
   // Calculate bubble positions
   const bubblePositions = useMemo(() => {
-    if (tasks.length === 0) return [];
-    if (tasks.length === 1) return [{ x: 0, y: -RADIUS, task: tasks[0] }];
-    
-    return tasks.map((task, i) => {
-      const angle = (i * (Math.PI * 2)) / tasks.length - (Math.PI / 2); // Start at top
+    const total = tasks.length + 1; // +1 for the plus button
+    const positions = tasks.map((task, i) => {
+      // Offset by 1 to leave room for the plus button at 0
+      const angle = ((i + 1) * (Math.PI * 2)) / total;
       return {
         x: Math.cos(angle) * RADIUS,
         y: Math.sin(angle) * RADIUS,
         task
       };
     });
+
+    // Add the plus button at 0 degrees (right side)
+    positions.push({
+      x: RADIUS,
+      y: 0,
+      isCreate: true
+    });
+    
+    return positions;
   }, [tasks]);
 
   const bind = useDrag(({ down, offset: [ox, oy], tap }) => {
@@ -41,7 +49,7 @@ function RoundaboutMenu({ tasks, position, onClose, onComplete }) {
       const dist = Math.sqrt(Math.pow(ox - bp.x, 2) + Math.pow(oy - bp.y, 2));
       if (dist < minDist) {
         minDist = dist;
-        closest = bp.task.id;
+        closest = bp.isCreate ? 'create' : bp.task.id;
       }
     });
 
@@ -49,7 +57,11 @@ function RoundaboutMenu({ tasks, position, onClose, onComplete }) {
 
     if (!down) {
       if (closest && Math.sqrt(ox*ox + oy*oy) > 30) {
-        onComplete(closest);
+        if (closest === 'create') {
+          onAddTask();
+        } else {
+          onComplete(closest);
+        }
         onClose();
         return;
       }
@@ -80,25 +92,32 @@ function RoundaboutMenu({ tasks, position, onClose, onComplete }) {
         style={{ left: position.x, top: position.y }}
       >
         {/* Render the bubbles */}
-        {bubblePositions.map((bp) => (
-          <div
-            key={bp.task.id}
-            className={`roundabout-bubble ${activeTask === bp.task.id ? 'active' : ''}`}
-            style={{ 
-              transform: `translate(calc(-50% + ${bp.x}px), calc(-50% + ${bp.y}px)) scale(${activeTask === bp.task.id ? 1.7 : 1})`,
-              backgroundColor: bp.task.color 
-            }}
-            onClick={() => {
-              onComplete(bp.task.id);
-              onClose();
-            }}
-            onMouseEnter={() => setActiveTask(bp.task.id)}
-            onMouseLeave={() => setActiveTask(null)}
-          >
-            <span>{bp.task.name.substring(0, 1).toUpperCase()}</span>
-            <div className="bubble-tooltip">{bp.task.name}</div>
-          </div>
-        ))}
+        {bubblePositions.map((bp) => {
+          const id = bp.isCreate ? 'create' : bp.task.id;
+          return (
+            <div
+              key={id}
+              className={`roundabout-bubble ${activeTask === id ? 'active' : ''} ${bp.isCreate ? 'create-bubble' : ''}`}
+              style={{ 
+                transform: `translate(calc(-50% + ${bp.x}px), calc(-50% + ${bp.y}px)) scale(${activeTask === id ? 1.7 : 1})`,
+                backgroundColor: bp.isCreate ? 'var(--color-purple)' : bp.task.color 
+              }}
+              onClick={() => {
+                if (bp.isCreate) {
+                  onAddTask();
+                } else {
+                  onComplete(bp.task.id);
+                }
+                onClose();
+              }}
+              onMouseEnter={() => setActiveTask(id)}
+              onMouseLeave={() => setActiveTask(null)}
+            >
+              <span>{bp.isCreate ? '+' : bp.task.name.substring(0, 1).toUpperCase()}</span>
+              <div className="bubble-tooltip">{bp.isCreate ? 'Add Task' : bp.task.name}</div>
+            </div>
+          );
+        })}
         
         {/* The central draggable knob */}
         <animated.div 
@@ -191,14 +210,12 @@ export default function CalendarView({ tasks, onCompleteTask, onEditTask }) {
               <div 
                 className="cell-hitbox" 
                 onClick={(e) => {
-                  if (activeTasks.length > 0) {
-                    const rect = e.currentTarget.getBoundingClientRect();
-                    setActiveDay({ 
-                      id: dayId, 
-                      x: rect.left + rect.width / 2, 
-                      y: rect.top + rect.height / 2 
-                    });
-                  }
+                  const rect = e.currentTarget.getBoundingClientRect();
+                  setActiveDay({ 
+                    id: dayId, 
+                    x: rect.left + rect.width / 2, 
+                    y: rect.top + rect.height / 2 
+                  });
                 }}
               >
                 <div className="cell-header">
@@ -229,23 +246,20 @@ export default function CalendarView({ tasks, onCompleteTask, onEditTask }) {
                   ))}
                 </div>
               </div>
-
-              {/* Render Roundabout Menu if active */}
-              {activeDay?.id === dayId && (
-                <RoundaboutMenu 
-                  tasks={activeTasks} 
-                  position={activeDay}
-                  onClose={() => setActiveDay(null)}
-                  onComplete={(taskId) => {
-                    onCompleteTask(taskId, activeDay.id);
-                    setActiveDay(null);
-                  }}
-                />
-              )}
             </div>
           );
         })}
       </div>
+
+      {activeDay && (
+        <RoundaboutMenu 
+          tasks={(dayTasksMap[activeDay.id] || []).filter(t => !t.isHistorical)} 
+          position={activeDay}
+          onClose={() => setActiveDay(null)}
+          onComplete={(taskId) => onCompleteTask(taskId, activeDay.id)}
+          onAddTask={() => onEditTask(null, activeDay.id)}
+        />
+      )}
     </div>
   );
 }

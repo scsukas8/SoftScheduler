@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import './NewTaskForm.css';
 
-export default function NewTaskForm({ onClose, onSave, onDelete, task = null }) {
+export default function NewTaskForm({ onClose, onSave, onDelete, task = null, initialDueDate = '' }) {
   const [name, setName] = useState(task?.name || '');
   const [frequencyInterval, setFrequencyInterval] = useState(
     task ? (task.interval_days % 7 === 0 ? task.interval_days / 7 : task.interval_days) : 1
@@ -12,17 +12,19 @@ export default function NewTaskForm({ onClose, onSave, onDelete, task = null }) 
   const [wiggleRoom, setWiggleRoom] = useState(task?.wiggle_room || 0);
   const [wiggleType, setWiggleType] = useState(task?.wiggle_type || 'symmetric');
   
-  // Calculate first due date display for existing tasks
+  // Calculate next due date display for existing tasks or use prefill
   const getInitialDueDate = () => {
-    if (!task) return '';
-    const completedAt = (task.completed_at && typeof task.completed_at.toDate === 'function') 
-      ? task.completed_at.toDate() 
-      : new Date(task.completed_at);
-    const dueDate = new Date(completedAt.getTime() + task.interval_days * 24 * 60 * 60 * 1000);
-    return dueDate.toISOString().split('T')[0];
+    if (task) {
+      const completedAt = (task.completed_at && typeof task.completed_at.toDate === 'function') 
+        ? task.completed_at.toDate() 
+        : new Date(task.completed_at);
+      const dueDate = new Date(completedAt.getTime() + task.interval_days * 24 * 60 * 60 * 1000);
+      return dueDate.toISOString().split('T')[0];
+    }
+    return initialDueDate ? initialDueDate.split('T')[0] : '';
   };
   
-  const [firstDueDate, setFirstDueDate] = useState(getInitialDueDate());
+  const [nextDueDate, setNextDueDate] = useState(getInitialDueDate());
   const [color, setColor] = useState(task?.color || 'var(--color-purple)');
   const [error, setError] = useState('');
 
@@ -39,7 +41,7 @@ export default function NewTaskForm({ onClose, onSave, onDelete, task = null }) 
     e.preventDefault();
     setError('');
 
-    if (!name || !firstDueDate) return;
+    if (!name || !nextDueDate) return;
 
     // ASCII validation
     if (!/^[\x20-\x7E]*$/.test(name)) {
@@ -69,8 +71,8 @@ export default function NewTaskForm({ onClose, onSave, onDelete, task = null }) 
       return;
     }
 
-    // Determine the completed_at date based on the target first due date
-    const targetDate = new Date(firstDueDate);
+    // Determine the completed_at date based on the target next due date
+    const targetDate = new Date(nextDueDate);
     const completedAt = new Date(targetDate.getTime() - intervalDays * 24 * 60 * 60 * 1000);
 
     onSave({
@@ -170,11 +172,11 @@ export default function NewTaskForm({ onClose, onSave, onDelete, task = null }) 
           </div>
 
           <div className="form-group">
-            <label>First due date:</label>
+            <label>Next due date:</label>
             <input 
               type="date" 
-              value={firstDueDate} 
-              onChange={e => setFirstDueDate(e.target.value)}
+              value={nextDueDate} 
+              onChange={e => setNextDueDate(e.target.value)}
               required
             />
           </div>
