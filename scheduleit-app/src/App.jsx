@@ -20,6 +20,18 @@ function App() {
            (!localStorage.getItem('softschedule-theme') && window.matchMedia('(prefers-color-scheme: dark)').matches);
   });
 
+  const [creationStats, setCreationStats] = useState(() => {
+    const saved = localStorage.getItem('softschedule-stats');
+    if (saved) {
+      try {
+        const parsed = JSON.parse(saved);
+        const today = new Date().toDateString();
+        if (parsed.date === today) return parsed;
+      } catch (e) { /* ignore */ }
+    }
+    return { count: 0, date: new Date().toDateString() };
+  });
+
   // Theme Sync
   useEffect(() => {
     if (isDark) {
@@ -30,6 +42,10 @@ function App() {
       localStorage.setItem('softschedule-theme', 'light');
     }
   }, [isDark]);
+
+  useEffect(() => {
+    localStorage.setItem('softschedule-stats', JSON.stringify(creationStats));
+  }, [creationStats]);
 
   // Auth Listener
   useEffect(() => {
@@ -93,11 +109,15 @@ function App() {
         const { id, ...data } = taskData;
         await updateTask(user.uid, id, data);
       } else {
+        if (creationStats.count >= 100) {
+          alert("Daily task creation limit (100) reached. To prevent spam, please try again tomorrow.");
+          return;
+        }
+
         // For new tasks, we let Firestore generate the ID or use the one from NewTaskForm
-        // But our dataService uses addDoc which generates a new ID.
-        // We'll strip the placeholder ID from the form if any.
         const { id, ...data } = taskData;
         await addTask(user.uid, data);
+        setCreationStats(prev => ({ ...prev, count: prev.count + 1 }));
       }
       setShowNewTaskForm(false);
       setEditingTask(null);

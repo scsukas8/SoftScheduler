@@ -24,6 +24,7 @@ export default function NewTaskForm({ onClose, onSave, onDelete, task = null }) 
   
   const [firstDueDate, setFirstDueDate] = useState(getInitialDueDate());
   const [color, setColor] = useState(task?.color || 'var(--color-purple)');
+  const [error, setError] = useState('');
 
   const colors = [
     { name: 'Purple', val: 'var(--color-purple)' },
@@ -36,11 +37,36 @@ export default function NewTaskForm({ onClose, onSave, onDelete, task = null }) 
 
   const handleSubmit = (e) => {
     e.preventDefault();
+    setError('');
+
     if (!name || !firstDueDate) return;
+
+    // ASCII validation
+    if (!/^[\x20-\x7E]*$/.test(name)) {
+      setError('Task name must contain only standard characters (ASCII).');
+      return;
+    }
+
+    if (name.length > 100) {
+      setError('Task name must be under 100 characters.');
+      return;
+    }
 
     let intervalDays = parseInt(frequencyInterval, 10);
     if (frequencyUnit === 'weeks') {
       intervalDays *= 7;
+    }
+
+    // 5 year limit (1825 days)
+    if (intervalDays > 1825) {
+      setError('Task interval cannot exceed 5 years.');
+      return;
+    }
+
+    const wiggle = parseInt(wiggleRoom, 10);
+    if (wiggle > 7) {
+      setError('Wiggle room cannot exceed 7 days.');
+      return;
     }
 
     // Determine the completed_at date based on the target first due date
@@ -51,7 +77,7 @@ export default function NewTaskForm({ onClose, onSave, onDelete, task = null }) 
       ...(task || {}), // Keep existing ID and other firestore meta if editing
       name,
       interval_days: intervalDays,
-      wiggle_room: parseInt(wiggleRoom, 10),
+      wiggle_room: wiggle,
       wiggle_type: wiggleType,
       completed_at: completedAt.toISOString(),
       color
@@ -71,14 +97,18 @@ export default function NewTaskForm({ onClose, onSave, onDelete, task = null }) 
         </div>
 
         <form onSubmit={handleSubmit} className="task-form">
-          {/* ... existing form groups ... */}
+          {error && <div className="form-error">{error}</div>}
           <div className="form-group">
             <label>Name:</label>
             <input 
               type="text" 
               value={name} 
-              onChange={e => setName(e.target.value)}
+              onChange={e => {
+                const val = e.target.value;
+                if (val.length <= 100) setName(val);
+              }}
               placeholder="e.g. Wash sheets"
+              maxLength="100"
               required 
             />
           </div>
@@ -90,13 +120,23 @@ export default function NewTaskForm({ onClose, onSave, onDelete, task = null }) 
                 <input 
                   type="number" 
                   min="1" 
+                  max={frequencyUnit === 'weeks' ? 260 : 1825}
                   value={frequencyInterval} 
-                  onChange={e => setFrequencyInterval(e.target.value)}
+                  onChange={e => {
+                    const maxVal = frequencyUnit === 'weeks' ? 260 : 1825;
+                    const val = parseInt(e.target.value, 10) || 0;
+                    setFrequencyInterval(Math.min(maxVal, Math.max(0, val)));
+                  }}
                   style={{ width: '80px' }}
                 />
                 <select 
                   value={frequencyUnit} 
-                  onChange={e => setFrequencyUnit(e.target.value)}
+                  onChange={e => {
+                    const newUnit = e.target.value;
+                    setFrequencyUnit(newUnit);
+                    const maxVal = newUnit === 'weeks' ? 260 : 1825;
+                    setFrequencyInterval(prev => Math.min(maxVal, prev));
+                  }}
                 >
                   <option value="days">days</option>
                   <option value="weeks">weeks</option>
@@ -111,8 +151,12 @@ export default function NewTaskForm({ onClose, onSave, onDelete, task = null }) 
               <input 
                 type="number" 
                 min="0" 
+                max="7"
                 value={wiggleRoom} 
-                onChange={e => setWiggleRoom(e.target.value)}
+                onChange={e => {
+                  const val = parseInt(e.target.value, 10) || 0;
+                  setWiggleRoom(Math.min(7, Math.max(0, val)));
+                }}
                 style={{ width: '80px' }}
               />
               <select 

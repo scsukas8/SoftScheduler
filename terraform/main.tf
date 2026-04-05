@@ -77,8 +77,18 @@ resource "google_firebaserules_ruleset" "firestore" {
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    match /users/{userId}/{document=**} {
-      allow read, write: if request.auth != null && request.auth.uid == userId;
+    match /users/{userId}/tasks/{taskId} {
+      allow read, delete: if request.auth != null && request.auth.uid == userId;
+      allow create, update: if request.auth != null && request.auth.uid == userId &&
+        request.resource.data.name is string &&
+        request.resource.data.name.size() >= 1 &&
+        request.resource.data.name.size() <= 100 &&
+        request.resource.data.wiggle_room is int &&
+        request.resource.data.wiggle_room >= 0 &&
+        request.resource.data.wiggle_room <= 7 &&
+        request.resource.data.interval_days is int &&
+        request.resource.data.interval_days >= 1 &&
+        request.resource.data.interval_days <= 1825; // 5 years
     }
   }
 }
