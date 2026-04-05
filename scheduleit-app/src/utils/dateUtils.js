@@ -6,7 +6,8 @@ export function calculateTimeRemaining(completedAt, intervalDays) {
 
   if (isNaN(completedDate.getTime())) return 0;
 
-  const targetDate = new Date(completedDate.getTime() + (intervalDays || 1) * 24 * 60 * 60 * 1000);
+  const targetDate = new Date(completedDate);
+  targetDate.setDate(targetDate.getDate() + (intervalDays || 1));
   const now = new Date();
   
   const diffTime = targetDate - now;

@@ -3,6 +3,7 @@ import {
   onSnapshot, 
   query, 
   addDoc, 
+  setDoc,
   updateDoc, 
   doc, 
   deleteDoc,
@@ -74,6 +75,21 @@ export const deleteTask = async (uid, taskId) => {
     await deleteDoc(taskRef);
   } catch (error) {
     console.error("Firestore Delete Task Error:", error);
+    throw error;
+  }
+};
+/**
+ * Set a task with a specific ID (used for Undo/Restore).
+ * @param {string} uid User ID
+ * @param {string} taskId Task ID
+ * @param {object} taskData Task details
+ */
+export const setTask = async (uid, taskId, taskData) => {
+  try {
+    const taskRef = doc(db, "users", uid, "tasks", taskId);
+    await setDoc(taskRef, taskData);
+  } catch (error) {
+    console.error("Firestore Set Task Error:", error);
     throw error;
   }
 };

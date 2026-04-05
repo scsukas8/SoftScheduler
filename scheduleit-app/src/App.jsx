@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import './App.css';
 import { auth, googleProvider } from './firebase';
 import { signInWithPopup, signOut, onAuthStateChanged } from 'firebase/auth';
-import { subscribeTasks, addTask, updateTask, deleteTask } from './services/dataService';
+import { subscribeTasks, addTask, updateTask, deleteTask, setTask } from './services/dataService';
 import ScheduleView from './components/ScheduleView';
 import CalendarView from './components/CalendarView';
 import NewTaskForm from './components/NewTaskForm';
@@ -86,13 +86,33 @@ function App() {
   const handleUndo = async () => {
     if (tasksHistory.length > 0 && user) {
       const previousState = tasksHistory[tasksHistory.length - 1];
-      // Sync back to firestore
-      for (const task of previousState) {
-        const currentTask = tasks.find(t => t.id === task.id);
-        if (currentTask && JSON.stringify(currentTask) !== JSON.stringify(task)) {
-          await updateTask(user.uid, task.id, task);
+      const currentState = tasks;
+      
+      try {
+        // 1. Restore/Update tasks that were in previousState
+        for (const oldTask of previousState) {
+          const currentTask = currentState.find(t => t.id === oldTask.id);
+          if (!currentTask) {
+            // Task was deleted, restore it with original ID
+            await setTask(user.uid, oldTask.id, oldTask);
+          } else if (JSON.stringify(currentTask) !== JSON.stringify(oldTask)) {
+            // Task was modified, revert it
+            const { id, ...data } = oldTask;
+            await updateTask(user.uid, id, data);
+          }
         }
+        
+        // 2. Delete tasks that are in currentState but not in previousState (newly created)
+        for (const currentTask of currentState) {
+          const oldTask = previousState.find(t => t.id === currentTask.id);
+          if (!oldTask) {
+            await deleteTask(user.uid, currentTask.id);
+          }
+        }
+      } catch (error) {
+        console.error("Undo Error:", error);
       }
+      
       setTasksHistory(prev => prev.slice(0, -1));
     }
   };

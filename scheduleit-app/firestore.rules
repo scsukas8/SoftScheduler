@@ -3,7 +3,7 @@ service cloud.firestore {
   match /databases/{database}/documents {
     match /users/{userId}/tasks/{taskId} {
       allow read, delete: if request.auth != null && request.auth.uid == userId;
-      allow create, update: if request.auth != null && request.auth.uid == userId &&
+      allow create: if request.auth != null && request.auth.uid == userId &&
         request.resource.data.name is string &&
         request.resource.data.name.size() >= 1 &&
         request.resource.data.name.size() <= 100 &&
@@ -13,6 +13,12 @@ service cloud.firestore {
         request.resource.data.interval_days is number &&
         request.resource.data.interval_days >= 1 &&
         request.resource.data.interval_days <= 1825; // 5 years
+      
+      allow update: if request.auth != null && request.auth.uid == userId &&
+        request.resource.data.name is string &&
+        request.resource.data.wiggle_room is number &&
+        request.resource.data.interval_days is number &&
+        request.resource.data.created_at == resource.data.created_at; // Protect immutable fields
     }
   }
 }
