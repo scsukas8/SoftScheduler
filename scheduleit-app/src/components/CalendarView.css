@@ -246,3 +246,52 @@
 }
 
 /* Remove 480px 2-column fallback as per user request */
+/* Styling for a realistic "Water Droplet" appearance */
+.burst-container-realistic {
+  position: relative;
+  width: 60px;
+  height: 60px;
+}
+
+.droplet-realistic {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: var(--size, 12px); /* Fallback to 12px */
+  height: var(--size, 12px);
+  border-radius: 50%;
+  
+  /* The Water Droplet Look: */
+  background: 
+    /* 1. The Specular Highlight (Shine on upper left) */
+    radial-gradient(circle at 30% 30%, #ffffff 0%, rgba(255,255,255,0) 25%),
+    /* 2. The Main Body (Dynamic color passed from React) */
+    var(--theme-color, #7fbef5);
+
+  /* True Gravity Animation: 1.0s linear so keyframes control the easing */
+  animation: flyOutRealistic 0.5s linear forwards;
+}
+
+/* Updated trajectories: Shooting out, hanging, then falling with gravity */
+@keyframes flyOutRealistic {
+  15% {
+    /* Explode FROM the edges of the parent bubble */
+    transform: translate(calc(-50% + var(--start-x)), calc(-50% + var(--start-y))) scale(1.5);
+    opacity: 1;
+  }
+  40% {
+    /* Fast outward burst reaches climax */
+    transform: translate(calc(-50% + var(--x)), calc(-50% + var(--y))) scale(1.1);
+    opacity: 1;
+  }
+  80% {
+    /* Horizontal drift slows down, gravity starts pulling down */
+    transform: translate(calc(-50% + var(--x) * 1.3), calc(-50% + var(--y) + 80px)) scale(0.8);
+    opacity: 0.9;
+  }
+  100% {
+    /* Plummets out of frame terminal velocity */
+    transform: translate(calc(-50% + var(--x) * 1.5), calc(-50% + var(--y) + 150px)) scale(0);
+    opacity: 0; 
+  }
+}

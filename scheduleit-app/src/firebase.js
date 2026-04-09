@@ -1,14 +1,6 @@
-import { initializeApp } from "firebase/app";
-import { 
-  getAuth, 
-  GoogleAuthProvider, 
-  setPersistence, 
-  browserLocalPersistence 
-} from "firebase/auth";
-import { getFirestore } from "firebase/firestore";
+import { initFirebaseCore } from '@scheduleit/core';
 
-// TODO: Replace with your actual Firebase project config 
-// You can find this in your Firebase Console -> Project Settings -> General
+// Web App Firebase config sourced via Vite
 const firebaseConfig = {
   apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
   authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN,
@@ -18,16 +10,8 @@ const firebaseConfig = {
   appId: import.meta.env.VITE_FIREBASE_APP_ID
 };
 
-// Initialize Firebase
-const app = initializeApp(firebaseConfig);
+// Initialize the shared core with the web environment payload
+const { app, auth, db, googleProvider } = initFirebaseCore(firebaseConfig);
 
-// Initialize Services
-export const auth = getAuth(app);
-export const db = getFirestore(app);
-export const googleProvider = new GoogleAuthProvider();
-
-// Force persistence to survive page refreshes
-setPersistence(auth, browserLocalPersistence)
-  .catch((error) => console.error("Auth Persistence Error:", error));
-
+export { auth, db, googleProvider };
 export default app;

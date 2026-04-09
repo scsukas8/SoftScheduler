@@ -1,0 +1,9 @@
+{
+  "name": "scheduleit-workspace",
+  "private": true,
+  "workspaces": [
+    "scheduleit-app",
+    "scheduleit-mobile",
+    "packages/*"
+  ]
+}

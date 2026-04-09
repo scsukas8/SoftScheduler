@@ -1,4 +1,4 @@
-import { calculateTimeRemaining, formatTimeRemaining } from '../utils/dateUtils';
+import { calculateTimeRemaining, formatTimeRemaining } from '@scheduleit/core';
 import './TaskCard.css'; // Add basic styling definitions here
 
 export default function TaskCard({ task, onComplete, onEdit }) {

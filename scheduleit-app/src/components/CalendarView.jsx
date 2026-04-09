@@ -1,13 +1,32 @@
 import React, { useMemo, useState, useEffect, useRef } from 'react';
 import { useSpring, animated, to } from '@react-spring/web';
 import { useDrag } from '@use-gesture/react';
-import { calculateTimeRemaining } from '../utils/dateUtils';
+import { calculateTimeRemaining } from '@scheduleit/core';
 import './CalendarView.css';
+
+// Updated directions: Adding 'sx' and 'sy' to start burst off the edges of the parent instead of the dead center
+const WATER_DROP_DIRECTIONS = [
+  // Upper Arc (Still flying out, but slightly less aggressive)
+  { sx: '18px', sy: '-7px', x: '50px', y: '-20px' }, 
+  { sx: '0px', sy: '-20px', x: '0px', y: '-45px' }, 
+  { sx: '-18px', sy: '-7px', x: '-50px', y: '-20px' },
+  // Mid-Level
+  { sx: '20px', sy: '3px', x: '70px', y: '10px' },  
+  { sx: '-20px', sy: '3px', x: '-70px', y: '10px' },
+  // Lower Arc (Fanning wide and dropping fast)
+  { sx: '16px', sy: '11px', x: '60px', y: '40px' },  
+  { sx: '8px', sy: '18px', x: '25px', y: '60px' }, 
+  { sx: '0px', sy: '20px', x: '0px', y: '60px' },
+  { sx: '-8px', sy: '18px', x: '-25px', y: '60px' },
+  { sx: '-16px', sy: '11px', x: '-60px', y: '40px' }
+];
 
 // The popup gesture menu for a specific day
 function RoundaboutMenu({ tasks, position, onClose, onComplete, onAddTask }) {
   const [activeTask, setActiveTask] = useState(null);
   const [selectedId, setSelectedId] = useState(null);
+  const [isClosing, setIsClosing] = useState(false);
+  const [isDragging, setIsDragging] = useState(false);
   
   // Spring for the central drag knob
   const [{ x, y }, api] = useSpring(() => ({ x: 0, y: 0 }));
@@ -67,17 +86,23 @@ function RoundaboutMenu({ tasks, position, onClose, onComplete, onAddTask }) {
   // Entrance animation for the entire menu
   const introSpring = useSpring({
     from: { opacity: 0, transform: 'scale(0.5)' },
-    to: { opacity: 1, transform: 'scale(1)' },
-    config: { mass: 1, tension: 180, friction: 14 }
+    to: { opacity: isClosing ? 0 : 1, transform: 'scale(1)' },
+    config: isClosing ? { duration: 250 } : { mass: 1, tension: 180, friction: 14 }
   });
 
   const bind = useDrag(({ down, offset: [ox, oy], tap }) => {
     // Only process if it's not a simple tap
     if (tap) return; 
 
+    // Efficiently track drag state to disable child point capture and prevent dropped events
+    setIsDragging(down); 
+
+    // Efficiently track drag state to disable child point capture and prevent dropped events on iOS
+    setIsDragging(down);
+
     // Find closest bubble
     let closest = null;
-    let minDist = 40; // Detection radius
+    let minDist = 65; // High detection radius to forgive high-velocity flings past the bubble
     
     bubblePositions.forEach((bp) => {
       // distance from drag point to bubble center
@@ -88,9 +113,10 @@ function RoundaboutMenu({ tasks, position, onClose, onComplete, onAddTask }) {
       }
     });
 
-    setActiveTask(closest);
-
-    if (!down) {
+    if (down) {
+      setActiveTask(closest);
+      api.start({ x: ox, y: oy, immediate: true });
+    } else {
       if (closest && Math.sqrt(ox*ox + oy*oy) > 30) {
         setSelectedId(closest);
         setTimeout(() => {
@@ -99,19 +125,16 @@ function RoundaboutMenu({ tasks, position, onClose, onComplete, onAddTask }) {
           } else {
             onComplete(closest);
           }
-          onClose();
-        }, 750);
+          onClose(); // Close the menu seamlessly with the end of the 1.0s CSS pop animation
+        }, 500);
         return;
       }
-      // Snap back if unreleased empty
+      // Snap back if unreleased empty and clear active task
+      setActiveTask(null);
       api.start({ x: 0, y: 0, immediate: false });
-    } else {
-      api.start({ x: ox, y: oy, immediate: true });
     }
   }, {
-    from: () => [x.get(), y.get()],
-    bounds: { left: -120, right: 120, top: -120, bottom: 120 },
-    rubberband: true
+    from: () => [x.get(), y.get()] // Resume smooth catching without restrictive bounds that lock the physics engine
   });
 
   return (
@@ -139,7 +162,6 @@ function RoundaboutMenu({ tasks, position, onClose, onComplete, onAddTask }) {
           const isActive = activeTask === id;
           const isSelected = selectedId === id;
           const isFadingOut = selectedId && !isSelected;
-          
           return (
             <Bubble 
               key={id}
@@ -147,13 +169,14 @@ function RoundaboutMenu({ tasks, position, onClose, onComplete, onAddTask }) {
               isActive={isActive}
               isSelected={isSelected}
               isFadingOut={isFadingOut}
+              isGlobalDragging={isDragging}
               onClick={() => {
                 setSelectedId(id);
                 setTimeout(() => {
                   if (bp.isCreate) onAddTask();
                   else onComplete(bp.task.id);
-                  onClose();
-                }, 750);
+                  onClose(); // Sync with 1.0s CSS animation end
+                }, 500);
               }}
             />
           );
@@ -179,61 +202,89 @@ function RoundaboutMenu({ tasks, position, onClose, onComplete, onAddTask }) {
  * Handles the "pop" (scaling) effect when targeted or selected
  */
 function Bubble({ bp, isActive, isSelected, isFadingOut, onClick }) {
-  // Use a ref to ensure the selection sequence only fires exactly once per selection
-  const hasStartedSelectionRef = useRef(false);
-  
-  // Use imperative api to ensure the selection sequence is never interrupted
-  const [style, api] = useSpring(() => ({
-    transform: `translate(calc(-50% + ${bp.x}px), calc(-50% + ${bp.y}px)) scale(1)`,
-    opacity: 1,
-    config: { tension: 350, friction: 12 }
-  }));
+  const { translate } = useSpring({
+    translate: `translate(calc(-50% + ${bp.x}px), calc(-50% + ${bp.y}px))`
+  });
 
-  useEffect(() => {
-    if (isSelected) {
-      // Guard against re-renders restarting the animation
-      if (!hasStartedSelectionRef.current) {
-        hasStartedSelectionRef.current = true;
-        // STAGE 1: BOLD GROW
-        api.start({
-          transform: `translate(calc(-50% + ${bp.x}px), calc(-50% + ${bp.y}px)) scale(2.2)`,
-          opacity: 1,
-          config: { tension: 800, friction: 20 },
-          onRest: () => {
-            // STAGE 2: RAPID BURST (SHRINK)
-            api.start({
-              transform: `translate(calc(-50% + ${bp.x}px), calc(-50% + ${bp.y}px)) scale(0.1)`,
-              opacity: 0,
-              config: { tension: 1200, friction: 25 }
-            });
-          }
-        });
-      }
-    } else {
-      // Reset the guard when the bubble is no longer selected
-      hasStartedSelectionRef.current = false;
-      // Regular hover/swipe scaling
-      api.start({
-        transform: `translate(calc(-50% + ${bp.x}px), calc(-50% + ${bp.y}px)) scale(${isActive ? 1.4 : 1})`,
-        opacity: isFadingOut ? 0 : 1,
-        config: { tension: 350, friction: 12 }
-      });
-    }
-  }, [isSelected, isActive, isFadingOut, bp.x, bp.y, api]);
+  const { scale } = useSpring({
+    scale: isActive ? 1.4 : 1,
+    config: { tension: 350, friction: 12 }
+  });
+
+  // Generate organic, randomized variations for the droplets exactly once when the bubble pops
+  const randomDroplets = useMemo(() => {
+    if (!isSelected) return [];
+    return WATER_DROP_DIRECTIONS.map((dir) => {
+      const bx = parseInt(dir.x, 10);
+      const by = parseInt(dir.y, 10);
+      
+      // Randomize destination spread (+/- 15px radial)
+      const rx = bx + (Math.random() * 30 - 15);
+      const ry = by + (Math.random() * 30 - 15);
+      
+      // Randomize gravity deceleration speed (reduced runtime by 0.1s: 0.3s to 0.6s)
+      const duration = 0.3 + Math.random() * 0.3;
+      
+      // Randomize droplet size slightly (+/- 2px), making them roughly 20% larger than before
+      const baseSize = Math.max(3, (dir.s || 5) + Math.floor(Math.random() * 5 - 2));
+      const size = Math.round(baseSize * 1.2);
+
+      return {
+        x: `${rx}px`,
+        y: `${ry}px`,
+        sx: dir.sx,
+        sy: dir.sy,
+        size: `${size}px`,
+        duration: `${duration}s`
+      };
+    });
+  }, [isSelected]);
 
   return (
     <animated.div
-      className={`roundabout-bubble ${isActive ? 'active' : ''} ${bp.isCreate ? 'create-bubble' : ''} ${isSelected ? 'selected' : ''}`}
-      style={{ 
-        ...style,
-        backgroundColor: bp.isCreate ? 'var(--color-purple)' : bp.task.color,
+      className="burst-container-realistic"
+      style={{
+        position: 'absolute',
+        top: '50%',
+        left: '50%',
+        transform: translate,
         zIndex: isSelected ? 1000 : 1,
-        pointerEvents: (isFadingOut || isSelected) ? 'none' : 'auto'
+        pointerEvents: (isFadingOut || isSelected) ? 'none' : 'auto',
+        opacity: isFadingOut ? 0 : 1
       }}
-      onClick={isSelected ? null : onClick}
     >
-      <span>{bp.isCreate ? '+' : bp.task.name.substring(0, 1).toUpperCase()}</span>
-      <div className="bubble-tooltip">{bp.isCreate ? 'Add Task' : bp.task.name}</div>
+      {!isSelected ? (
+        <animated.div 
+          className={`roundabout-bubble ${isActive ? 'active' : ''} ${bp.isCreate ? 'create-bubble' : ''}`}
+          onClick={onClick}
+          style={{
+             position: 'absolute',
+             top: '50%', left: '50%',
+             transform: scale.to(s => `translate(-50%, -50%) scale(${s})`),
+             backgroundColor: bp.isCreate ? 'var(--color-purple)' : bp.task.color,
+             width: '48px', height: '48px'
+          }}
+        >
+          <span>{bp.isCreate ? '+' : bp.task.name.substring(0, 1).toUpperCase()}</span>
+          <div className="bubble-tooltip">{bp.isCreate ? 'Add Task' : bp.task.name}</div>
+        </animated.div>
+      ) : (
+        randomDroplets.map((rd, i) => (
+          <div 
+            key={i} 
+            className="droplet-realistic" 
+            style={{ 
+              '--x': rd.x, 
+              '--y': rd.y,
+              '--start-x': rd.sx,
+              '--start-y': rd.sy,
+              '--size': rd.size,
+              animationDuration: rd.duration,
+              '--theme-color': bp.isCreate ? 'var(--color-purple)' : bp.task.color
+            }} 
+          />
+        ))
+      )}
     </animated.div>
   );
 }

@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import './App.css';
 import { auth, googleProvider } from './firebase';
 import { signInWithPopup, signOut, onAuthStateChanged } from 'firebase/auth';
-import { subscribeTasks, addTask, updateTask, deleteTask, setTask } from './services/dataService';
+import { subscribeTasks, addTask, updateTask, deleteTask, setTask } from '@scheduleit/core';
 import ScheduleView from './components/ScheduleView';
 import CalendarView from './components/CalendarView';
 import NewTaskForm from './components/NewTaskForm';
