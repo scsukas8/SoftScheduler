@@ -27,7 +27,7 @@ export default function ScheduleView({ tasks, onCompleteTask, onEditTask }) {
   const transitions = useTransition(filteredTasks, {
     key: (task) => task.id,
     from: { opacity: 0, transform: 'translateX(-20px)', height: 0, marginBottom: 0 },
-    enter: { opacity: 1, transform: 'translateX(0)', height: 100, marginBottom: 16 },
+    enter: { opacity: 1, transform: 'translateX(0)', height: 72, marginBottom: 12 },
     leave: [
       { transform: 'translateX(100%)', opacity: 0 },
       { height: 0, marginBottom: 0 }

@@ -30,7 +30,7 @@ export default function CalendarScreen({ tasks = [], onCompleteTask, onEditTask 
 
       if (isNaN(completedAt.getTime())) return;
 
-      const daysRemaining = calculateTimeRemaining(completedAt, task.interval_days);
+      const { daysRemaining } = calculateTimeRemaining(completedAt, task.interval_days);
       const wiggle = parseInt(task.wiggle_room || 0, 10);
       const isLateOnly = task.wiggle_type === 'late-only';
       
@@ -156,12 +156,12 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between'
   },
   cell: {
-    width: '48%',
+    width: '31%',
     backgroundColor: '#2A2A2A',
     borderRadius: 12,
-    padding: 12,
-    marginBottom: 16,
-    minHeight: 120,
+    padding: 10,
+    marginBottom: 10,
+    minHeight: 110,
     borderWidth: 1,
     borderColor: '#333'
   },

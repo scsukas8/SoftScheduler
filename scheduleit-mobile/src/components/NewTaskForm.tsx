@@ -3,6 +3,7 @@ import {
   View, Text, TextInput, TouchableOpacity, 
   StyleSheet, ScrollView, Modal, KeyboardAvoidingView, Platform 
 } from 'react-native';
+import DateTimePicker from '@react-native-community/datetimepicker';
 
 export default function NewTaskForm({ visible, onClose, onSave, onDelete, task = null, initialDueDate = '' }) {
   const [name, setName] = useState(task?.name || '');
@@ -14,21 +15,26 @@ export default function NewTaskForm({ visible, onClose, onSave, onDelete, task =
   );
   const [wiggleRoom, setWiggleRoom] = useState(task?.wiggle_room !== undefined ? String(task.wiggle_room) : '0');
   const [wiggleType, setWiggleType] = useState(task?.wiggle_type || 'symmetric');
-  
-  const getInitialDueDate = () => {
+  const [color, setColor] = useState(task?.color || '#a48cff');
+  const [error, setError] = useState('');
+  const [showDatePicker, setShowDatePicker] = useState(false);
+
+  // Helper to get initial date object from various inputs
+  const getInitialDate = () => {
     if (task) {
       const completedAt = (task.completed_at && typeof task.completed_at.toDate === 'function') 
         ? task.completed_at.toDate() 
         : new Date(task.completed_at);
-      const dueDate = new Date(completedAt.getTime() + task.interval_days * 24 * 60 * 60 * 1000);
-      return dueDate.toISOString().split('T')[0];
+      return new Date(completedAt.getTime() + task.interval_days * 24 * 60 * 60 * 1000);
     }
-    return initialDueDate ? initialDueDate.split('T')[0] : '';
+    if (initialDueDate) {
+       const [y, m, d] = initialDueDate.split('-').map(Number);
+       if (!isNaN(y)) return new Date(y, m - 1, d);
+    }
+    return new Date();
   };
-  
-  const [nextDueDate, setNextDueDate] = useState(getInitialDueDate());
-  const [color, setColor] = useState(task?.color || '#a48cff');
-  const [error, setError] = useState('');
+
+  const [date, setDate] = useState(getInitialDate());
 
   const colors = [
     { name: 'Purple', val: '#a48cff' },
@@ -39,42 +45,24 @@ export default function NewTaskForm({ visible, onClose, onSave, onDelete, task =
     { name: 'Peach', val: '#ffc5b3' },
   ];
 
+  const onDateChange = (event: any, selectedDate?: Date) => {
+    const currentDate = selectedDate || date;
+    setShowDatePicker(Platform.OS === 'ios');
+    setDate(currentDate);
+  };
+
   const handleSave = () => {
     setError('');
-    if (!name || !nextDueDate) {
-      setError('Name and Next Due Date are required.');
-      return;
-    }
-
-    if (!/^[\x20-\x7E]*$/.test(name) || name.length > 100) {
-      setError('Task name must be invalid or too long.');
+    if (!name) {
+      setError('Name is required.');
       return;
     }
 
     let intervalDays = parseInt(frequencyInterval, 10) || 1;
     if (frequencyUnit === 'weeks') intervalDays *= 7;
 
-    if (intervalDays > 1825) {
-      setError('Task interval cannot exceed 5 years.');
-      return;
-    }
-
     const wiggle = parseInt(wiggleRoom, 10) || 0;
-    if (wiggle > 7) {
-      setError('Wiggle room cannot exceed 7 days.');
-      return;
-    }
-
-    // Basic date parsing (YYYY-MM-DD)
-    const parts = nextDueDate.split('-');
-    if (parts.length !== 3) {
-      setError('Date must be YYYY-MM-DD.');
-      return;
-    }
-    
-    const [year, month, day] = parts.map(Number);
-    const targetDate = new Date(year, month - 1, day);
-    const completedAt = new Date(targetDate.getTime() - intervalDays * 24 * 60 * 60 * 1000);
+    const completedAt = new Date(date.getTime() - intervalDays * 24 * 60 * 60 * 1000);
 
     onSave({
       ...(task || {}),
@@ -87,8 +75,18 @@ export default function NewTaskForm({ visible, onClose, onSave, onDelete, task =
     });
   };
 
+  const commonInputProps: any = {
+    autoCorrect: false,
+    autoCapitalize: 'none',
+    autoComplete: 'off',
+    textContentType: 'none',
+    importantForAutofill: 'no',
+    spellCheck: false,
+    placeholderTextColor: '#666'
+  };
+
   return (
-    <Modal visible={visible} animationType="slide" transparent={true} onRequestClose={onClose}>
+    <Modal visible={visible} animationType="slide" transparent={true} onRequestClose={onClose} statusBarTranslucent>
       <KeyboardAvoidingView 
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
         style={styles.modalOverlay}
@@ -107,11 +105,11 @@ export default function NewTaskForm({ visible, onClose, onSave, onDelete, task =
             <View style={styles.inputGroup}>
               <Text style={styles.label}>Name:</Text>
               <TextInput 
+                {...commonInputProps}
                 style={styles.input}
                 value={name}
                 onChangeText={setName}
                 placeholder="e.g. Wash sheets"
-                placeholderTextColor="#666"
                 maxLength={100}
               />
             </View>
@@ -120,6 +118,7 @@ export default function NewTaskForm({ visible, onClose, onSave, onDelete, task =
               <Text style={styles.label}>Frequency (Every):</Text>
               <View style={styles.row}>
                 <TextInput 
+                  {...commonInputProps}
                   style={[styles.input, styles.numberInput]}
                   value={frequencyInterval}
                   onChangeText={setFrequencyInterval}
@@ -146,6 +145,7 @@ export default function NewTaskForm({ visible, onClose, onSave, onDelete, task =
               <Text style={styles.label}>Wiggle Room:</Text>
               <View style={styles.row}>
                 <TextInput 
+                  {...commonInputProps}
                   style={[styles.input, styles.numberInput]}
                   value={wiggleRoom}
                   onChangeText={setWiggleRoom}
@@ -169,14 +169,23 @@ export default function NewTaskForm({ visible, onClose, onSave, onDelete, task =
             </View>
 
             <View style={styles.inputGroup}>
-              <Text style={styles.label}>Next Due Date (YYYY-MM-DD):</Text>
-              <TextInput 
-                style={styles.input}
-                value={nextDueDate}
-                onChangeText={setNextDueDate}
-                placeholder="YYYY-MM-DD"
-                placeholderTextColor="#666"
-              />
+              <Text style={styles.label}>Next Due Date:</Text>
+              <TouchableOpacity 
+                style={styles.input} 
+                onPress={() => setShowDatePicker(true)}
+              >
+                <Text style={{ color: '#fff', fontSize: 16 }}>{date.toLocaleDateString()}</Text>
+              </TouchableOpacity>
+              
+              {showDatePicker && (
+                <DateTimePicker
+                  value={date}
+                  mode="date"
+                  display="default"
+                  onChange={onDateChange}
+                  themeVariant="dark"
+                />
+              )}
             </View>
 
             <View style={styles.inputGroup}>
@@ -194,7 +203,7 @@ export default function NewTaskForm({ visible, onClose, onSave, onDelete, task =
 
             <View style={styles.actionRow}>
               {task && (
-                <TouchableOpacity style={styles.deleteBtn} onPress={() => onDelete(task.id)}>
+                <TouchableOpacity style={styles.deleteBtn} onPress={() => onDelete(task)}>
                   <Text style={styles.deleteBtnText}>Delete</Text>
                 </TouchableOpacity>
               )}
@@ -213,14 +222,14 @@ const styles = StyleSheet.create({
   modalOverlay: {
     flex: 1,
     justifyContent: 'flex-end',
-    backgroundColor: 'rgba(0,0,0,0.5)',
+    backgroundColor: 'rgba(0,0,0,0.6)',
   },
   modalContent: {
     backgroundColor: '#1E1E1E',
-    borderTopLeftRadius: 24,
-    borderTopRightRadius: 24,
+    borderTopLeftRadius: 32,
+    borderTopRightRadius: 32,
     padding: 24,
-    height: '85%'
+    height: '90%',
   },
   header: {
     flexDirection: 'row',
@@ -229,42 +238,46 @@ const styles = StyleSheet.create({
     marginBottom: 24
   },
   headerText: {
-    fontSize: 24,
-    fontWeight: 'bold',
+    fontSize: 28,
+    fontWeight: '800',
     color: '#fff'
   },
   closeBtn: {
-    padding: 8
+    padding: 10,
+    backgroundColor: 'rgba(255,255,255,0.05)',
+    borderRadius: 20
   },
   closeBtnText: {
     color: '#888',
-    fontSize: 20,
+    fontSize: 18,
     fontWeight: 'bold'
   },
   errorText: {
     color: '#ff6b6b',
     backgroundColor: 'rgba(255,107,107,0.1)',
     padding: 12,
-    borderRadius: 8,
-    marginBottom: 16
+    borderRadius: 12,
+    marginBottom: 16,
+    textAlign: 'center',
   },
   inputGroup: {
-    marginBottom: 20
+    marginBottom: 22
   },
   label: {
-    color: '#aaa',
-    marginBottom: 8,
+    color: '#888',
+    marginBottom: 10,
     fontSize: 14,
-    fontWeight: '600'
+    fontWeight: '700',
+    textTransform: 'uppercase',
   },
   input: {
-    backgroundColor: '#333',
+    backgroundColor: '#262626',
     color: '#fff',
-    borderRadius: 8,
-    padding: 12,
+    borderRadius: 12,
+    padding: 16,
     fontSize: 16,
     borderWidth: 1,
-    borderColor: '#444'
+    borderColor: '#333'
   },
   row: {
     flexDirection: 'row',
@@ -274,24 +287,27 @@ const styles = StyleSheet.create({
     flex: 1
   },
   toggleGroup: {
-    flex: 2,
+    flex: 1.5,
     flexDirection: 'row',
-    backgroundColor: '#333',
-    borderRadius: 8,
-    overflow: 'hidden'
+    backgroundColor: '#262626',
+    borderRadius: 12,
+    overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: '#333'
   },
   toggleBtn: {
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: 12
+    paddingVertical: 14
   },
   toggleActive: {
-    backgroundColor: '#555'
+    backgroundColor: '#404040'
   },
   toggleText: {
     color: '#fff',
-    fontWeight: '500'
+    fontWeight: '600',
+    fontSize: 14
   },
   colorRow: {
     flexDirection: 'row',
@@ -299,10 +315,10 @@ const styles = StyleSheet.create({
     marginTop: 8
   },
   colorSwatch: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    opacity: 0.5
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    opacity: 0.4
   },
   colorSwatchActive: {
     opacity: 1,
@@ -311,18 +327,18 @@ const styles = StyleSheet.create({
   },
   actionRow: {
     flexDirection: 'row',
-    marginTop: 16,
-    marginBottom: 40,
-    gap: 12
+    marginTop: 32,
+    marginBottom: 60,
+    gap: 16
   },
   deleteBtn: {
     flex: 1,
-    padding: 16,
-    borderRadius: 12,
+    padding: 18,
+    borderRadius: 16,
     alignItems: 'center',
-    backgroundColor: 'rgba(255, 60, 60, 0.1)',
+    backgroundColor: 'rgba(255, 60, 60, 0.05)',
     borderWidth: 1,
-    borderColor: 'rgba(255, 60, 60, 0.3)'
+    borderColor: 'rgba(255, 60, 60, 0.2)'
   },
   deleteBtnText: {
     color: '#ff6b6b',
@@ -331,13 +347,13 @@ const styles = StyleSheet.create({
   },
   saveBtn: {
     flex: 2,
-    padding: 16,
-    borderRadius: 12,
-    alignItems: 'center'
+    padding: 18,
+    borderRadius: 16,
+    alignItems: 'center',
   },
   saveBtnText: {
     color: '#000',
-    fontWeight: 'bold',
-    fontSize: 16
+    fontWeight: '900',
+    fontSize: 18
   }
 });
