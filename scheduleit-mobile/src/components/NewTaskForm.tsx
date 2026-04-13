@@ -28,7 +28,9 @@ export default function NewTaskForm({ visible, onClose, onSave, onDelete, task =
       return new Date(completedAt.getTime() + task.interval_days * 24 * 60 * 60 * 1000);
     }
     if (initialDueDate) {
-       const [y, m, d] = initialDueDate.split('-').map(Number);
+       // Handle both YYYY-MM-DD and full ISO strings
+       const datePart = initialDueDate.split('T')[0];
+       const [y, m, d] = datePart.split('-').map(Number);
        if (!isNaN(y)) return new Date(y, m - 1, d);
     }
     return new Date();

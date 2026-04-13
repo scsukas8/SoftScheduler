@@ -1,12 +1,19 @@
 import React, { useMemo, useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Dimensions, ScrollView } from 'react-native';
+import { View, Text, StyleSheet, Dimensions, ScrollView, TouchableOpacity } from 'react-native';
 import { calculateTimeRemaining } from '@scheduleit/core';
 import RoundaboutMenu from './RoundaboutMenu';
+import { GestureDetector, Gesture } from 'react-native-gesture-handler';
+import Animated, { useSharedValue, runOnJS } from 'react-native-reanimated';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
 export default function CalendarScreen({ tasks = [], onCompleteTask, onEditTask }) {
   const [activeDay, setActiveDay] = useState(null); // { id, x, y }
+  
+  // Shared values for Hold-and-Swipe
+  const gestureX = useSharedValue(0);
+  const gestureY = useSharedValue(0);
+  const activeTaskSV = useSharedValue(null); // Shared value for the hovered task
 
   // 14 day view (7 columns, 2 rows) - Starting 3 days in the past
   const days = useMemo(() => {
@@ -59,17 +66,18 @@ export default function CalendarScreen({ tasks = [], onCompleteTask, onEditTask 
     return map;
   }, [tasks, days]);
 
-  const handleCellPress = (dayId, layoutEvt) => {
-    // In React Native, measuring layout to absolute screen coords requires ref.measure()
-    // For simplicity, we just use the center of the screen or approximate since we have a modal overlay
-    // Actually, capturing coords natively: 
-    // We'll just pass 'center' mapped to the screen since the popover normally hovers
-    // We can simulate position: { x: SCREEN_WIDTH/2, y: 300 } for now until we add measure blocks
-    setActiveDay({ 
-      id: dayId, 
-      x: SCREEN_WIDTH / 2, 
-      y: 400 
-    });
+  const handleDaySelect = (dayId, x, y) => {
+    setActiveDay({ id: dayId, x, y });
+  };
+
+  const handleCommit = (id) => {
+    if (!activeDay) return;
+    if (id === 'create') {
+      onEditTask && onEditTask(null, activeDay.id);
+    } else {
+      onCompleteTask && onCompleteTask(id, activeDay.id);
+    }
+    setActiveDay(null);
   };
 
   return (
@@ -82,39 +90,73 @@ export default function CalendarScreen({ tasks = [], onCompleteTask, onEditTask 
             const dayId = day.toISOString();
             const dayTasks = dayTasksMap[dayId] || [];
             const isToday = day.toDateString() === new Date().toDateString();
-            
-            return (
-              <TouchableOpacity 
-                key={dayId}
-                style={[styles.cell, isToday && styles.cellToday]}
-                onPress={(evt) => handleCellPress(dayId, evt)}
-              >
-                <View style={styles.cellHeader}>
-                  <Text style={[styles.dayName, isToday && styles.textToday]}>
-                    {day.toLocaleDateString('en-US', { weekday: 'short' })}
-                  </Text>
-                  <Text style={[styles.dayNum, isToday && styles.textToday]}>
-                    {day.getDate()}
-                  </Text>
-                </View>
 
-                <View style={styles.taskIndicators}>
-                  {dayTasks.map(task => (
-                    <TouchableOpacity
-                      key={task.id + (task.isHistorical ? '-hist' : '')}
-                      style={[
-                        styles.taskLabel, 
-                        { backgroundColor: task.color, opacity: task.isHistorical ? 0.4 : 1 }
-                      ]}
-                      onPress={() => onEditTask && onEditTask(task)}
-                    >
-                      <Text style={styles.taskLabelText} numberOfLines={1}>
-                        {task.isOverdue ? '! ' : ''}{task.name}
-                      </Text>
-                    </TouchableOpacity>
-                  ))}
+            // Unified Gesture for this cell
+            const panGesture = Gesture.Pan()
+              .onBegin((e) => {
+                gestureX.value = 0;
+                gestureY.value = 0;
+              })
+              .onUpdate((e) => {
+                gestureX.value = e.translationX;
+                gestureY.value = e.translationY;
+              })
+              .onEnd((e) => {
+                if (activeTaskSV.value) {
+                  // If we have a task hovered, commit it!
+                  runOnJS(handleCommit)(activeTaskSV.value);
+                } else {
+                  // No task hovered, close
+                  runOnJS(setActiveDay)(null);
+                }
+              });
+
+            const longPressGesture = Gesture.LongPress()
+              .onEnd((e, success) => {
+                if (success) {
+                  runOnJS(handleDaySelect)(dayId, e.absoluteX, e.absoluteY);
+                }
+              });
+
+            const tapGesture = Gesture.Tap()
+              .onEnd((e, success) => {
+                if (success) {
+                  runOnJS(handleDaySelect)(dayId, e.absoluteX, e.absoluteY);
+                }
+              });
+
+            const composed = Gesture.Simultaneous(panGesture, Gesture.Exclusive(longPressGesture, tapGesture));
+
+            return (
+              <GestureDetector key={dayId} gesture={composed}>
+                <View style={[styles.cell, isToday && styles.cellToday]}>
+                  <View style={styles.cellHeader}>
+                    <Text style={[styles.dayName, isToday && styles.textToday]}>
+                      {day.toLocaleDateString('en-US', { weekday: 'short' })}
+                    </Text>
+                    <Text style={[styles.dayNum, isToday && styles.textToday]}>
+                      {day.getDate()}
+                    </Text>
+                  </View>
+
+                  <View style={styles.taskIndicators}>
+                    {dayTasks.map(task => (
+                      <TouchableOpacity
+                        key={task.id + (task.isHistorical ? '-hist' : '')}
+                        style={[
+                          styles.taskLabel, 
+                          { backgroundColor: task.color, opacity: task.isHistorical ? 0.4 : 1 }
+                        ]}
+                        onPress={() => onEditTask && onEditTask(task)}
+                      >
+                        <Text style={styles.taskLabelText} numberOfLines={1}>
+                          {task.isOverdue ? '! ' : ''}{task.name}
+                        </Text>
+                      </TouchableOpacity>
+                    ))}
+                  </View>
                 </View>
-              </TouchableOpacity>
+              </GestureDetector>
             );
           })}
         </View>
@@ -124,6 +166,9 @@ export default function CalendarScreen({ tasks = [], onCompleteTask, onEditTask 
         <RoundaboutMenu 
           tasks={(dayTasksMap[activeDay.id] || []).filter(t => !t.isHistorical)} 
           position={activeDay}
+          externalTranslateX={gestureX}
+          externalTranslateY={gestureY}
+          hoveredTaskSV={activeTaskSV} // Pass the SV to be written to
           onClose={() => setActiveDay(null)}
           onComplete={(taskId) => onCompleteTask && onCompleteTask(taskId, activeDay.id)}
           onAddTask={() => onEditTask && onEditTask(null, activeDay.id)}
@@ -153,10 +198,11 @@ const styles = StyleSheet.create({
   grid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    justifyContent: 'space-between'
+    justifyContent: 'flex-start',
+    gap: 10
   },
   cell: {
-    width: '31%',
+    width: (SCREEN_WIDTH - 40) / 3, // Precise calculation with gap
     backgroundColor: '#2A2A2A',
     borderRadius: 12,
     padding: 10,

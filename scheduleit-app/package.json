@@ -15,7 +15,8 @@
     "date-fns": "^4.1.0",
     "firebase": "^12.11.0",
     "react": "^19.2.4",
-    "react-dom": "^19.2.4"
+    "react-dom": "^19.2.4",
+    "@scheduleit/core": "*"
   },
   "devDependencies": {
     "@eslint/js": "^9.39.4",

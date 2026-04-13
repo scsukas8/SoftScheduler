@@ -316,7 +316,7 @@ export default function CalendarView({ tasks, onCompleteTask, onEditTask }) {
 
       if (isNaN(completedAt.getTime())) return;
 
-      const daysRemaining = calculateTimeRemaining(completedAt, task.interval_days);
+      const { daysRemaining } = calculateTimeRemaining(completedAt, task.interval_days);
       const wiggle = parseInt(task.wiggle_room || 0, 10);
       const isLateOnly = task.wiggle_type === 'late-only';
       

@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { StatusBar } from 'expo-status-bar';
-import { StyleSheet, Text, View, ActivityIndicator, TouchableOpacity, SafeAreaView, Platform, Animated as RNAnimated } from 'react-native';
+import { StyleSheet, Text, View, ActivityIndicator, TouchableOpacity, SafeAreaView, Platform, Animated as RNAnimated, Dimensions } from 'react-native';
 import { NavigationContainer } from '@react-navigation/native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
@@ -20,6 +20,7 @@ import CalendarScreen from './src/components/CalendarScreen';
 import NewTaskForm from './src/components/NewTaskForm';
 
 const Tab = createBottomTabNavigator();
+const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
 export default function App() {
   const [user, setUser] = useState<User | null>(null);
@@ -105,7 +106,19 @@ export default function App() {
       showUndo(originalTask);
 
       const now = new Date();
-      await updateTask(user.uid, taskId, { completed_at: now.toISOString() });
+      const currentCompletedAt = (task.completed_at && typeof task.completed_at.toDate === 'function') 
+        ? task.completed_at.toDate() 
+        : new Date(task.completed_at || now);
+      
+      const currentTargetDate = new Date(currentCompletedAt.getTime() + task.interval_days * 24 * 60 * 60 * 1000);
+      
+      let newCompletedAt = now;
+      // If task is already completed for the current interval, push to next
+      if (currentTargetDate > now) {
+        newCompletedAt = new Date(currentCompletedAt.getTime() + task.interval_days * 24 * 60 * 60 * 1000);
+      }
+
+      await updateTask(user.uid, taskId, { completed_at: newCompletedAt.toISOString() });
     } catch (err) {
       console.error("Complete task error:", err);
     }
@@ -114,7 +127,19 @@ export default function App() {
   const handleUndo = async () => {
     if (!undoItem || !user) return;
     try {
-      await setTask(user.uid, undoItem.task.id, undoItem.task);
+      const { id, created_at, ...taskData } = undoItem.task;
+      const taskExists = tasks.some(t => t.id === id);
+      
+      if (taskExists) {
+        // Just revert the fields, but don't try to update immutable created_at
+        await updateTask(user.uid, id, taskData);
+      } else {
+        // Re-create the deleted task
+        // Note: created_at from snapshot might be a string, but setTask will 
+        // write it back as is. If rules allow, it will restore the task.
+        await setTask(user.uid, id, { ...taskData, created_at });
+      }
+      
       setUndoItem(null);
     } catch (err) {
       console.error("Undo error:", err);
@@ -213,12 +238,22 @@ export default function App() {
         </NavigationContainer>
 
         {!editingTask && (
-          <TouchableOpacity 
-            style={styles.fab} 
-            onPress={() => setEditingTask({ task: null })}
-          >
-            <Text style={styles.fabIcon}>+</Text>
-          </TouchableOpacity>
+          <View style={styles.fabContainer}>
+            {undoItem && (
+              <TouchableOpacity 
+                style={styles.undoFab} 
+                onPress={handleUndo}
+              >
+                <Ionicons name="refresh-outline" size={30} color="#a48cff" />
+              </TouchableOpacity>
+            )}
+            <TouchableOpacity 
+              style={styles.fab} 
+              onPress={() => setEditingTask({ task: null })}
+            >
+              <Text style={styles.fabIcon}>+</Text>
+            </TouchableOpacity>
+          </View>
         )}
 
         {undoItem && (
@@ -228,10 +263,7 @@ export default function App() {
               outputRange: [100, 0]
             }) }]
           }]}>
-            <Text style={styles.undoText}>Task {undoItem.task.name} removed</Text>
-            <TouchableOpacity onPress={handleUndo}>
-              <Text style={styles.undoActionText}>UNDO</Text>
-            </TouchableOpacity>
+            <Text style={styles.undoText}>Task {undoItem.task.name} completed</Text>
           </RNAnimated.View>
         )}
 
@@ -299,16 +331,36 @@ const styles = StyleSheet.create({
     paddingBottom: Platform.OS === 'ios' ? 20 : 10,
     height: Platform.OS === 'ios' ? 80 : 60,
   },
-  fab: {
+  fabContainer: {
     position: 'absolute',
     right: 30,
     bottom: 110,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 15
+  },
+  fab: {
     width: 65,
     height: 65,
     borderRadius: 32.5,
     backgroundColor: '#a48cff',
     justifyContent: 'center',
     alignItems: 'center',
+    elevation: 10,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.4,
+    shadowRadius: 5,
+  },
+  undoFab: {
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    backgroundColor: '#333',
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 2,
+    borderColor: '#a48cff',
     elevation: 10,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 4 },
@@ -325,12 +377,11 @@ const styles = StyleSheet.create({
     position: 'absolute',
     bottom: 110,
     left: 20,
-    right: 100,
+    width: SCREEN_WIDTH - 150, // Avoid overlapping with FABs
     backgroundColor: '#333',
     borderRadius: 12,
     padding: 16,
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
     elevation: 10,
     shadowColor: '#000',

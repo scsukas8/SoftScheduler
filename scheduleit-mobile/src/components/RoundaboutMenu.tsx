@@ -8,7 +8,8 @@ import Animated, {
   runOnJS,
   withSequence,
   withDelay,
-  Easing
+  Easing,
+  useAnimatedReaction
 } from 'react-native-reanimated';
 import { GestureDetector, Gesture } from 'react-native-gesture-handler';
 
@@ -28,14 +29,23 @@ const WATER_DROP_DIRECTIONS = [
   { sx: -16, sy: 11, x: -60, y: 40 }
 ];
 
-export default function RoundaboutMenu({ tasks, position, onClose, onComplete, onAddTask }) {
+export default function RoundaboutMenu({ 
+  tasks, 
+  position, 
+  onClose, 
+  onComplete, 
+  onAddTask,
+  externalTranslateX, // SharedValue from parent
+  externalTranslateY,  // SharedValue from parent
+  hoveredTaskSV       // SharedValue to sync back to parent
+}) {
   const [activeTask, setActiveTask] = useState(null);
   const [selectedId, setSelectedId] = useState(null);
   const [isClosing, setIsClosing] = useState(false);
 
-  // Gesture Tracker
-  const translateX = useSharedValue(0);
-  const translateY = useSharedValue(0);
+  // Use external values or fallback for standalone use
+  const translateX = externalTranslateX || useSharedValue(0);
+  const translateY = externalTranslateY || useSharedValue(0);
   
   // Outer overlay entrance
   const opacity = useSharedValue(0);
@@ -81,25 +91,41 @@ export default function RoundaboutMenu({ tasks, position, onClose, onComplete, o
     return positions;
   }, [tasks, position.x]);
 
+  // Sync external values to internal activeTask state
+  const checkSelection = (tx, ty) => {
+    'worklet';
+    let closest = null;
+    let minDist = 65;
+    
+    bubblePositions.forEach((bp) => {
+      const dist = Math.sqrt(Math.pow(tx - bp.x, 2) + Math.pow(ty - bp.y, 2));
+      if (dist < minDist) {
+        minDist = dist;
+        closest = bp.isCreate ? 'create' : bp.task.id;
+      }
+    });
+
+    if (closest !== activeTask) {
+      runOnJS(setActiveTask)(closest);
+      if (hoveredTaskSV) {
+        hoveredTaskSV.value = closest;
+      }
+    }
+  };
+
+  useAnimatedReaction(
+    () => ({ x: translateX.value, y: translateY.value }),
+    (data) => {
+      checkSelection(data.x, data.y);
+    },
+    [bubblePositions, activeTask]
+  );
+
   const panGesture = Gesture.Pan()
+    .enabled(!externalTranslateX) // Only enable internal pan if NOT controlled externally
     .onUpdate((e) => {
       translateX.value = e.translationX;
       translateY.value = e.translationY;
-
-      let closest = null;
-      let minDist = 65;
-      
-      bubblePositions.forEach((bp) => {
-        const dist = Math.sqrt(Math.pow(e.translationX - bp.x, 2) + Math.pow(e.translationY - bp.y, 2));
-        if (dist < minDist) {
-          minDist = dist;
-          closest = bp.isCreate ? 'create' : bp.task.id;
-        }
-      });
-      
-      if (closest !== activeTask) {
-        runOnJS(setActiveTask)(closest);
-      }
     })
     .onEnd((e) => {
       const distTracker = Math.sqrt(e.translationX*e.translationX + e.translationY*e.translationY);
@@ -135,7 +161,7 @@ export default function RoundaboutMenu({ tasks, position, onClose, onComplete, o
       { translateX: -24 + translateX.value },
       { translateY: -24 + translateY.value }
     ],
-    opacity: selectedId ? 0.2 : 1
+    opacity: (selectedId || externalTranslateX) ? 0 : 1 // Hide knob if controlled or selected
   }));
 
   return (
