@@ -1,5 +1,17 @@
 {
   "projects": {
     "default": "scheduleapp-491917"
+  },
+  "targets": {
+    "scheduleapp-491917": {
+      "hosting": {
+        "staging": [
+          "scheduleapp-491917"
+        ],
+        "prod": [
+          "softschedule"
+        ]
+      }
+    }
   }
 }

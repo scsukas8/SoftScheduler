@@ -9,7 +9,7 @@ on:
       - '.github/workflows/deploy.yml'
 
 jobs:
-  build_and_deploy:
+  build:
     runs-on: ubuntu-latest
     env:
       FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
@@ -18,10 +18,8 @@ jobs:
       id-token: write
     steps:
       - uses: actions/checkout@v4
-      
       - name: Install Dependencies
         run: npm install
-
       - name: Build App
         run: npm run build
         working-directory: ./scheduleit-app
@@ -32,13 +30,53 @@ jobs:
           VITE_FIREBASE_STORAGE_BUCKET: ${{ secrets.VITE_FIREBASE_STORAGE_BUCKET }}
           VITE_FIREBASE_MESSAGING_SENDER_ID: ${{ secrets.VITE_FIREBASE_MESSAGING_SENDER_ID }}
           VITE_FIREBASE_APP_ID: ${{ secrets.VITE_FIREBASE_APP_ID }}
-        
+      - name: Upload Build Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: dist
+          path: ./scheduleit-app/dist
+
+  deploy_staging:
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@v4
+      - name: Download Build Artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: dist
+          path: ./scheduleit-app/dist
       - id: auth
         uses: google-github-actions/auth@v2
         with:
-          workload_identity_provider: 'projects/1073857724039/locations/global/workloadIdentityPools/github-actions-pool/providers/github-provider'
-          service_account: 'github-actions-deployer@scheduleapp-491917.iam.gserviceaccount.com'
-          
-      - name: Deploy to Firebase
-        run: npx firebase-tools deploy --only hosting,firestore:rules
+          workload_identity_provider: projects/1073857724039/locations/global/workloadIdentityPools/github-actions-pool/providers/github-provider
+          service_account: github-actions-deployer@scheduleapp-491917.iam.gserviceaccount.com
+      - name: Deploy to Firebase Staging
+        run: npx firebase-tools deploy --only hosting:staging,firestore:rules
+        working-directory: ./scheduleit-app
+
+  deploy_production:
+    needs: deploy_staging
+    runs-on: ubuntu-latest
+    environment: Production
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@v4
+      - name: Download Build Artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: dist
+          path: ./scheduleit-app/dist
+      - id: auth
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: projects/1073857724039/locations/global/workloadIdentityPools/github-actions-pool/providers/github-provider
+          service_account: github-actions-deployer@scheduleapp-491917.iam.gserviceaccount.com
+      - name: Deploy to Firebase Production
+        run: npx firebase-tools deploy --only hosting:prod
         working-directory: ./scheduleit-app
