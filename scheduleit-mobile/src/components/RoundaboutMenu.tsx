@@ -34,11 +34,18 @@ export default function RoundaboutMenu({
   position, 
   onClose, 
   onComplete, 
+  onSchedule,
   onAddTask,
   externalTranslateX, // SharedValue from parent
   externalTranslateY,  // SharedValue from parent
   hoveredTaskSV       // SharedValue to sync back to parent
 }) {
+  const isFuture = useMemo(() => {
+    const day = new Date(position.id);
+    const today = new Date();
+    today.setHours(0,0,0,0);
+    return day > today;
+  }, [position.id]);
   const [activeTask, setActiveTask] = useState(null);
   const [selectedId, setSelectedId] = useState(null);
   const [isClosing, setIsClosing] = useState(false);
@@ -136,6 +143,7 @@ export default function RoundaboutMenu({
         // Wait 500ms for water burst before firing close
         setTimeout(() => {
           if (activeTask === 'create') onAddTask();
+          else if (isFuture) onSchedule(activeTask, position.id);
           else onComplete(activeTask);
           handleClose();
         }, 500);
@@ -169,6 +177,11 @@ export default function RoundaboutMenu({
       <Animated.View style={[styles.overlay, overlayStyle]}>
         <TouchableWithoutFeedback onPress={(e) => e.stopPropagation()}>
           <Animated.View style={[styles.container, containerStyle]}>
+            <View style={[styles.header, isFuture && styles.headerFuture]}>
+              <Text style={styles.headerText}>
+                {isFuture ? '📅 Schedule Task' : '✅ Complete Task'}
+              </Text>
+            </View>
             
             {/* Bubbles */}
             {bubblePositions.map((bp) => {
@@ -188,6 +201,7 @@ export default function RoundaboutMenu({
                     setSelectedId(id);
                     setTimeout(() => {
                       if (bp.isCreate) onAddTask();
+                      else if (isFuture) onSchedule(bp.task.id, position.id);
                       else onComplete(bp.task.id);
                       handleClose();
                     }, 500);
@@ -345,5 +359,30 @@ const styles = StyleSheet.create({
   },
   droplet: {
     position: 'absolute',
+  },
+  header: {
+    position: 'absolute',
+    top: -RADIUS - 50,
+    alignSelf: 'center',
+    backgroundColor: '#222', // Darker, more solid
+    paddingVertical: 10,
+    paddingHorizontal: 20,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: '#555',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.5,
+    shadowRadius: 8,
+    elevation: 5,
+  },
+  headerFuture: {
+    borderColor: '#a48cff',
+    backgroundColor: '#1a1625', // Deep purple, solid
+  },
+  headerText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: 'bold',
   }
 });

@@ -1,23 +1,51 @@
 import React, { useMemo } from 'react';
 import { View, Text, StyleSheet } from 'react-native';
+import { calculateTimeRemaining } from '@scheduleit/core';
 import Animated, { FadeInUp, SlideOutRight, LinearTransition } from 'react-native-reanimated';
 import TaskCard from './TaskCard';
 
-export default function ScheduleScreen({ tasks, onCompleteTask, onEditTask }) {
+export default function ScheduleScreen({ tasks, onCompleteTask, onEditTask, onScheduleTask }: { 
+  tasks: any[]; 
+  onCompleteTask: (id: string) => void;
+  onEditTask: (task: any) => void;
+  onScheduleTask: any; 
+}) {
   // Sort tasks by time remaining (most overdue/urgent first)
   const sortedTasks = useMemo(() => {
     return [...tasks].sort((a, b) => {
-      const getTargetTime = (task) => {
-        const completedDate = (task.completed_at && typeof task.completed_at.toDate === 'function') 
-          ? task.completed_at.toDate() 
-          : new Date(task.completed_at || Date.now());
-        return completedDate.getTime() + (task.interval_days || 1) * 24 * 60 * 60 * 1000;
+      const aInfo = calculateTimeRemaining(a.completed_at, a.interval_days, a.scheduled_date, a.wiggle_room, a.wiggle_type);
+      const bInfo = calculateTimeRemaining(b.completed_at, b.interval_days, b.scheduled_date, b.wiggle_room, b.wiggle_type);
+      
+      const getPriority = (info: any) => {
+        const end = info.windowEndDiff ?? 0;
+        const start = info.windowStartDiff ?? 0;
+        // Tier 0: Overdue or Due Now (unlocked)
+        if (end < 0 || (start <= 0 && !info.isScheduled)) return 0;
+        // Tier 1: Scheduled (locked commitment)
+        if (info.isScheduled) return 1;
+        // Tier 2: Soon (unlocked, next 7 days)
+        if (start <= 7) return 2;
+        // Tier 3: Distant
+        return 3;
       };
-      return getTargetTime(a) - getTargetTime(b);
+
+      const aPrior = getPriority(aInfo);
+      const bPrior = getPriority(bInfo);
+
+      if (aPrior !== bPrior) return aPrior - bPrior;
+
+      // Internal sorting within the same tier
+      if (aPrior <= 1) {
+        // Overdue, Due, or Scheduled: sort by deadline/lock-date
+        return (aInfo.windowEndDiff ?? 0) - (bInfo.windowEndDiff ?? 0);
+      } else {
+        // Soon or Distant: sort by horizon (first possible day)
+        return (aInfo.windowStartDiff ?? 0) - (bInfo.windowStartDiff ?? 0);
+      }
     });
   }, [tasks]);
 
-  const renderItem = ({ item }) => {
+  const renderItem = ({ item }: { item: any }) => {
     return (
       <Animated.View
         entering={FadeInUp}
@@ -28,6 +56,7 @@ export default function ScheduleScreen({ tasks, onCompleteTask, onEditTask }) {
           task={item} 
           onComplete={() => onCompleteTask && onCompleteTask(item.id)}
           onEdit={() => onEditTask && onEditTask(item)}
+          onSchedule={onScheduleTask}
         />
       </Animated.View>
     );

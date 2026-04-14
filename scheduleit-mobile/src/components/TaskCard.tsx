@@ -11,20 +11,29 @@ import Animated, {
 } from 'react-native-reanimated';
 import { GestureDetector, Gesture } from 'react-native-gesture-handler';
 
-export default function TaskCard({ task, onComplete, onEdit }) {
+import { Alert } from 'react-native';
+
+interface TaskCardProps {
+  task: any;
+  onComplete: (id: string) => void;
+  onEdit: (task: any) => void;
+  onSchedule: (id: string, date: string, mode?: 'lock' | 'reschedule') => void;
+}
+
+export default function TaskCard({ task, onComplete, onEdit, onSchedule }: TaskCardProps) {
   const colorScheme = useColorScheme();
   const isDark = colorScheme === 'dark';
   
   const interval = task.interval_days || 1;
   const wiggle = task.wiggle_room || 0;
 
-  const { isOverdue, daysRemaining, hoursRemaining, hoursTotal } = useMemo(() => {
-    return calculateTimeRemaining(task.completed_at, interval);
-  }, [task.completed_at, interval]);
+  const { isOverdue, daysRemaining, windowStartDiff, windowEndDiff, hoursTotal, isScheduled } = useMemo(() => {
+    return calculateTimeRemaining(task.completed_at, interval, task.scheduled_date, wiggle, task.wiggle_type);
+  }, [task.completed_at, interval, task.scheduled_date, wiggle, task.wiggle_type]);
 
-  const { isWiggle, formattedTime, isCritical } = useMemo(() => {
-    return formatTimeRemaining(isOverdue, daysRemaining, hoursRemaining, wiggle, hoursTotal);
-  }, [isOverdue, daysRemaining, hoursRemaining, wiggle, hoursTotal]);
+  const { isInRange, isSoon, isDistant, isCritical, formattedTime } = useMemo(() => {
+    return formatTimeRemaining(isOverdue, daysRemaining, windowStartDiff, windowEndDiff, isScheduled);
+  }, [isOverdue, daysRemaining, windowStartDiff, windowEndDiff, isScheduled]);
 
   // Swipe logic
   const translateX = useSharedValue(0);
@@ -50,10 +59,44 @@ export default function TaskCard({ task, onComplete, onEdit }) {
 
   const animatedStyle = useAnimatedStyle(() => ({
     transform: [{ translateX: translateX.value }],
-    opacity: opacity.value
+    opacity: isDistant ? 0.6 : 1, // Consistent with web
   }));
 
-  const indicatorColor = isCritical ? '#ff6b6b' : isWiggle ? '#ffd93d' : task.color || '#a48cff';
+  const indicatorColor = isCritical ? '#ff6b6b' : isInRange ? '#ffd93d' : task.color || '#a48cff';
+
+  // Tiered background logic
+  const getCardBg = () => {
+    if (isCritical || isInRange) return indicatorColor + '66'; // 40% opacity
+    if (isSoon) return indicatorColor + '1A'; // 10% opacity
+    return indicatorColor + (isDark ? '0D' : '08'); // 5% vs 3% tint (faded)
+  };
+
+  const getBorderColor = () => {
+    return indicatorColor + '4D'; // 30% border
+  };
+
+  const isFullBg = false; // Toned down, so we treat it as light bg for text contrast
+
+  const handleSchedulePress = () => {
+    const isReschedule = isCritical || isInRange;
+    Alert.alert(
+      isReschedule ? "Reschedule Window" : "Schedule Task",
+      isReschedule ? "Shift the entire wiggle window to a new day." : "Choose a day to lock this task to.",
+      [
+        { text: "Tomorrow", onPress: () => {
+          const d = new Date();
+          d.setDate(d.getDate() + 1);
+          onSchedule(task.id, d.toISOString(), isReschedule ? 'reschedule' : 'lock');
+        }},
+        { text: "In 3 Days", onPress: () => {
+          const d = new Date();
+          d.setDate(d.getDate() + 3);
+          onSchedule(task.id, d.toISOString(), isReschedule ? 'reschedule' : 'lock');
+        }},
+        { text: "Cancel", style: "cancel" }
+      ]
+    );
+  };
 
   return (
     <View style={styles.container}>
@@ -62,24 +105,47 @@ export default function TaskCard({ task, onComplete, onEdit }) {
           styles.card, 
           animatedStyle, 
           { 
-            backgroundColor: indicatorColor + (isDark ? '1A' : '0F'), // 10% vs 6% tint
-            borderColor: indicatorColor + (isDark ? '4D' : '33'), // 30% vs 20% border
+            backgroundColor: getCardBg(),
+            borderColor: getBorderColor(),
           }
         ]}>
-          <View style={[styles.indicator, { backgroundColor: indicatorColor }]} />
+          <View style={[styles.indicator, { backgroundColor: task.color || '#a48cff' }]} />
           
           <View style={styles.content}>
-            <Text style={[styles.title, { color: isDark ? '#fff' : '#222' }]} numberOfLines={1}>{task.name}</Text>
-            <Text style={[styles.subtitle, { color: isDark ? '#888' : '#666' }]}>{formattedTime}</Text>
+            <Text style={[
+              styles.title, 
+              { color: isDark ? '#fff' : '#222' },
+              isCritical && styles.italic
+            ]} numberOfLines={1}>{task.name}</Text>
+            <Text style={[
+              styles.subtitle, 
+              { color: isDark ? '#888' : '#666' },
+              isCritical && styles.italic
+            ]}>
+              {formattedTime}
+            </Text>
           </View>
 
           <View style={styles.actions}>
             <TouchableOpacity style={styles.iconBtn} onPress={() => onEdit(task)}>
               <Ionicons name="create-outline" size={24} color="#888" />
             </TouchableOpacity>
-            <TouchableOpacity style={styles.iconBtn} onPress={() => onComplete(task.id)}>
-              <Ionicons name="checkmark-circle-outline" size={28} color={indicatorColor} />
-            </TouchableOpacity>
+            
+            {(isCritical || !isInRange) && (
+              <TouchableOpacity style={styles.iconBtn} onPress={handleSchedulePress}>
+                <Ionicons name="calendar-outline" size={28} color={isSoon || isCritical ? indicatorColor : '#a48cff'} />
+              </TouchableOpacity>
+            )}
+
+            {(isCritical || isInRange) && (
+              <TouchableOpacity style={styles.iconBtn} onPress={() => onComplete(task.id)}>
+                <Ionicons 
+                  name="checkmark-circle-outline" 
+                  size={28} 
+                  color={indicatorColor} 
+                />
+              </TouchableOpacity>
+            )}
           </View>
         </Animated.View>
       </GestureDetector>
@@ -128,5 +194,8 @@ const styles = StyleSheet.create({
   },
   iconBtn: {
     padding: 8,
+  },
+  italic: {
+    fontStyle: 'italic',
   }
 });

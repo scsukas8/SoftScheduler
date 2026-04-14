@@ -7,7 +7,7 @@ import Animated, { useSharedValue, runOnJS } from 'react-native-reanimated';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
-export default function CalendarScreen({ tasks = [], onCompleteTask, onEditTask }) {
+export default function CalendarScreen({ tasks = [], onCompleteTask, onEditTask, onScheduleTask }) {
   const [activeDay, setActiveDay] = useState(null); // { id, x, y }
   
   // Shared values for Hold-and-Swipe
@@ -37,14 +37,18 @@ export default function CalendarScreen({ tasks = [], onCompleteTask, onEditTask 
 
       if (isNaN(completedAt.getTime())) return;
 
-      const { daysRemaining } = calculateTimeRemaining(completedAt, task.interval_days);
-      const wiggle = parseInt(task.wiggle_room || 0, 10);
-      const isLateOnly = task.wiggle_type === 'late-only';
+      const { windowStartDiff, windowEndDiff } = calculateTimeRemaining(
+        completedAt, 
+        task.interval_days, 
+        task.scheduled_date,
+        task.wiggle_room,
+        task.wiggle_type
+      );
       
-      if (daysRemaining < -3) return;
+      if (windowEndDiff < -3) return;
 
-      const startDayIdx = isLateOnly ? (3 + daysRemaining) : (3 + daysRemaining - wiggle);
-      const endDayIdx = 3 + daysRemaining + wiggle;
+      const startDayIdx = 3 + windowStartDiff;
+      const endDayIdx = 3 + windowEndDiff;
       
       const completedDayStr = completedAt.toISOString().split('T')[0];
 
@@ -58,7 +62,7 @@ export default function CalendarScreen({ tasks = [], onCompleteTask, onEditTask 
           map[day.toISOString()].push({ 
             ...task, 
             isHistorical: !isActive && isHistorical,
-            isOverdue: daysRemaining < 0 && index === (3 + daysRemaining)
+            isOverdue: windowEndDiff < 0 && index === (3 + windowEndDiff)
           });
         }
       });
@@ -75,7 +79,12 @@ export default function CalendarScreen({ tasks = [], onCompleteTask, onEditTask 
     if (id === 'create') {
       onEditTask && onEditTask(null, activeDay.id);
     } else {
-      onCompleteTask && onCompleteTask(id, activeDay.id);
+      const isFuture = new Date(activeDay.id) > new Date();
+      if (isFuture) {
+        onScheduleTask && onScheduleTask(id, activeDay.id);
+      } else {
+        onCompleteTask && onCompleteTask(id, activeDay.id);
+      }
     }
     setActiveDay(null);
   };
@@ -171,6 +180,7 @@ export default function CalendarScreen({ tasks = [], onCompleteTask, onEditTask 
           hoveredTaskSV={activeTaskSV} // Pass the SV to be written to
           onClose={() => setActiveDay(null)}
           onComplete={(taskId) => onCompleteTask && onCompleteTask(taskId, activeDay.id)}
+          onSchedule={onScheduleTask}
           onAddTask={() => onEditTask && onEditTask(null, activeDay.id)}
         />
       )}

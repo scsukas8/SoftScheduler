@@ -6,6 +6,7 @@ import { subscribeTasks, addTask, updateTask, deleteTask, setTask } from '@sched
 import ScheduleView from './components/ScheduleView';
 import CalendarView from './components/CalendarView';
 import NewTaskForm from './components/NewTaskForm';
+import ScheduleModal from './components/ScheduleModal';
 
 function App() {
   const [user, setUser] = useState(null);
@@ -15,6 +16,8 @@ function App() {
   const [view, setView] = useState('schedule');
   const [showNewTaskForm, setShowNewTaskForm] = useState(false);
   const [editingTask, setEditingTask] = useState(null);
+  const [schedulingTask, setSchedulingTask] = useState(null);
+  const [schedulingMode, setSchedulingMode] = useState('lock');
   const [prefillDate, setPrefillDate] = useState(null);
   const [isDark, setIsDark] = useState(() => {
     return localStorage.getItem('softschedule-theme') === 'dark' || 
@@ -70,17 +73,27 @@ function App() {
   }, [user]);
 
   const handleLogin = async () => {
+    console.log("Login button clicked. Attempting Google Auth...");
     try {
+      if (!auth || !googleProvider) {
+        throw new Error("Firebase Auth or Google Provider not initialized. Configuration might be missing.");
+      }
+      setLoading(true);
       await signInWithPopup(auth, googleProvider);
+      console.log("Login successful.");
     } catch (error) {
-      console.error("Login Error:", error);
+      console.error("Critical Login Error:", error);
+      alert(`Login failed: ${error.message || "Unknown error"}. Check console for details.`);
+    } finally {
+      setLoading(false);
     }
   };
 
   const handleLogout = () => signOut(auth);
 
   const saveHistory = () => {
-    setTasksHistory(prev => [...prev, tasks].slice(-20));
+    // Ensure we have a deep copy of tasks to prevent state contamination
+    setTasksHistory(prev => [...prev, JSON.parse(JSON.stringify(tasks))].slice(-20));
   };
 
   const handleUndo = async () => {
@@ -95,10 +108,26 @@ function App() {
           if (!currentTask) {
             // Task was deleted, restore it with original ID
             await setTask(user.uid, oldTask.id, oldTask);
-          } else if (JSON.stringify(currentTask) !== JSON.stringify(oldTask)) {
-            // Task was modified, revert it
-            const { id, ...data } = oldTask;
-            await updateTask(user.uid, id, data);
+          } else {
+            // Check if important scheduling or metadata fields changed
+            // We compare specific fields to avoid unnecessary writes, 
+            // but ensure we catch scheduled_date transitions.
+            const changed = 
+              currentTask.completed_at !== oldTask.completed_at ||
+              currentTask.scheduled_date !== oldTask.scheduled_date ||
+              currentTask.name !== oldTask.name ||
+              currentTask.interval_days !== oldTask.interval_days ||
+              currentTask.wiggle_room !== oldTask.wiggle_room ||
+              currentTask.color !== oldTask.color;
+
+            if (changed) {
+              // Strip immutable created_at and ID before update to satisfy Firestore rules
+              const { id, created_at, ...data } = oldTask;
+              await updateTask(user.uid, id, {
+                ...data,
+                scheduled_date: oldTask.scheduled_date || null
+              });
+            }
           }
         }
         
@@ -126,11 +155,26 @@ function App() {
   const handleSaveTask = async (taskData) => {
     if (!user) return;
     
+    // Close form immediately for NEW tasks (optimistic UI)
+    // For editing, we might want to wait, or close too
+    const isNew = !editingTask;
+    if (isNew) {
+      setShowNewTaskForm(false);
+      setEditingTask(null);
+      setPrefillDate(null);
+    }
+
     try {
+      console.log("Initiating Task Save...", taskData);
       saveHistory();
+
       if (editingTask) {
         const { id, ...data } = taskData;
-        await updateTask(user.uid, id, data);
+        await updateTask(user.uid, id, {
+          ...data,
+          scheduled_date: null
+        });
+        console.log("Task Updated successfully.");
       } else {
         if (creationStats.count >= 100) {
           alert("Daily task creation limit (100) reached. To prevent spam, please try again tomorrow.");
@@ -140,12 +184,14 @@ function App() {
         const { id, ...data } = taskData;
         await addTask(user.uid, data);
         setCreationStats(prev => ({ ...prev, count: prev.count + 1 }));
+        console.log("Task Added successfully.");
       }
     } catch (error) {
       console.error("Critical Task Save Error:", error);
       alert(`Save failed: ${error.message || "Connectivity issue"}. The task may still appear locally but won't be saved until you're online.`);
+      // If we closed optimistically, the task will naturally disappear when Firestore rolls back
     } finally {
-      // Always close form and clear editing state to avoid UI hang
+      // Ensure state is cleared even if we didn't close optimistically
       setShowNewTaskForm(false);
       setEditingTask(null);
       setPrefillDate(null);
@@ -184,7 +230,36 @@ function App() {
       }
     }
 
-    await updateTask(user.uid, id, { completed_at: newCompletedAt.toISOString() });
+    await updateTask(user.uid, id, { 
+      completed_at: newCompletedAt.toISOString(),
+      scheduled_date: null // Clear override upon completion
+    });
+  };
+
+  const handleScheduleTask = async (id, chosenDate, mode = 'lock') => {
+    if (!user) return;
+    saveHistory();
+    
+    if (mode === 'reschedule') {
+      const task = tasks.find(t => t.id === id);
+      if (task) {
+        // Shift window: newCompletedAt = chosenDate - interval
+        const interval = task.interval_days || 1;
+        const targetDate = new Date(chosenDate);
+        const newCompletedAt = new Date(targetDate.getTime() - interval * 24 * 60 * 60 * 1000);
+        
+        await updateTask(user.uid, id, { 
+          completed_at: newCompletedAt.toISOString(),
+          scheduled_date: null // Clear any existing lock
+        });
+      }
+    } else {
+      // Standard lock (wiggle = 0)
+      await updateTask(user.uid, id, { 
+        scheduled_date: chosenDate
+      });
+    }
+    setSchedulingTask(null);
   };
 
   if (loading) {
@@ -251,9 +326,18 @@ function App() {
 
       <main className="app-content">
         {view === 'schedule' ? (
-          <ScheduleView tasks={tasks} onCompleteTask={handleCompleteTask} onEditTask={handleEditTask} />
+          <ScheduleView 
+            tasks={tasks} 
+            onCompleteTask={handleCompleteTask} 
+            onEditTask={handleEditTask} 
+            onScheduleTask={(taskId, mode = 'lock') => {
+              const task = tasks.find(t => t.id === taskId);
+              setSchedulingTask(task);
+              setSchedulingMode(mode);
+            }} 
+          />
         ) : (
-          <CalendarView tasks={tasks} onCompleteTask={handleCompleteTask} onEditTask={handleEditTask} />
+          <CalendarView tasks={tasks} onCompleteTask={handleCompleteTask} onEditTask={handleEditTask} onScheduleTask={handleScheduleTask} />
         )}
       </main>
 
@@ -282,6 +366,15 @@ function App() {
           }}
           onSave={handleSaveTask}
           onDelete={handleDeleteTask}
+        />
+      )}
+
+      {schedulingTask && (
+        <ScheduleModal 
+          task={schedulingTask}
+          mode={schedulingMode}
+          onClose={() => setSchedulingTask(null)}
+          onSchedule={handleScheduleTask}
         />
       )}
     </div>

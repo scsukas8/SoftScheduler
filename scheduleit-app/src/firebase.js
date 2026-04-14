@@ -10,6 +10,13 @@ const firebaseConfig = {
   appId: import.meta.env.VITE_FIREBASE_APP_ID
 };
 
+// Diagnostic check for missing environment variables in deployed app
+Object.entries(firebaseConfig).forEach(([key, value]) => {
+  if (!value) {
+    console.error(`Firebase Config Error: ${key} is missing. Check your GitHub Secrets and deploy.yml.`);
+  }
+});
+
 // Initialize the shared core with the web environment payload
 const { app, auth, db, googleProvider } = initFirebaseCore(firebaseConfig);
 

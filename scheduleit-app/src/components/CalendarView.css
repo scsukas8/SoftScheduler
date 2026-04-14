@@ -112,6 +112,30 @@
   transform: scale(1.05);
 }
 
+.roundabout-header {
+  position: absolute;
+  bottom: 110px; /* Above the bubbles relative to the container center */
+  left: 50%;
+  transform: translateX(-50%);
+  background-color: var(--card-bg);
+  padding: 8px 16px;
+  border-radius: var(--radius-pill);
+  font-weight: 600;
+  white-space: nowrap;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.2);
+  border: 1px solid var(--border-color);
+  color: var(--text-primary);
+  opacity: 1; /* Full opacity for text clarity */
+  pointer-events: none;
+  z-index: 105;
+}
+
+.roundabout-header.is-future {
+  border-color: var(--color-purple);
+  background-color: rgba(168, 85, 247, 0.65); /* Much higher opacity */
+  color: white; /* Contrast for the purple tint */
+}
+
 /* -- ROUNDABOUT MENU -- */
 .roundabout-overlay {
   position: fixed;

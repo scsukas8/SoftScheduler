@@ -69,28 +69,65 @@
 }
 
 /* Status-specific backgrounds using color-mix for automatic light/dark compatibility */
-.task-card.critical {
-  --task-color: #ff6b6b;
-  border-color: color-mix(in srgb, var(--task-color), transparent 70%);
+.task-card.critical,
+.task-card.in-range {
+  background-color: color-mix(in srgb, var(--task-color), transparent 60%);
+  border-color: color-mix(in srgb, var(--task-color), transparent 40%);
+  color: #222;
 }
 
-.task-card.wiggle {
-  --task-color: #ffd93d;
-  border-color: color-mix(in srgb, var(--task-color), transparent 70%);
-}
-
-/* Specific to dark mode overrides for cards */
-html.dark .task-card {
+.task-card.soon {
   background-color: color-mix(in srgb, var(--task-color), transparent 90%);
-  border-color: color-mix(in srgb, var(--task-color), transparent 60%);
+  border-color: color-mix(in srgb, var(--task-color), transparent 80%);
+}
+
+.task-card.distant {
+  background-color: color-mix(in srgb, var(--task-color), transparent 95%);
+  border-color: color-mix(in srgb, var(--task-color), transparent 90%);
+  opacity: 0.6;
+}
+
+.task-card.critical h3.overdue-title {
+  font-style: italic;
+}
+
+.task-card.critical p.overdue-text {
+  font-style: italic;
+  color: #666;
+}
+
+.task-card.in-range h3,
+.task-card.critical h3 {
+  color: #222;
+}
+
+.task-card.in-range p,
+.task-card.critical p {
+  color: #666;
+}
+
+/* Dark mode refinements */
+html.dark .task-card.critical,
+html.dark .task-card.in-range {
+  background-color: color-mix(in srgb, var(--task-color), transparent 60%);
+  border-color: color-mix(in srgb, var(--task-color), transparent 40%);
   color: #fff;
 }
 
-html.dark .task-content p {
+html.dark .task-card.critical h3.overdue-title,
+html.dark .task-card.in-range h3 {
+  color: #fff;
+}
+
+html.dark .task-card.critical p.overdue-text,
+html.dark .task-card.in-range p {
   color: #aaa;
 }
 
-html.dark .action-btn:hover {
-  background-color: rgba(255, 255, 255, 0.1);
-  color: #fff;
+html.dark .task-card.soon {
+  background-color: color-mix(in srgb, var(--task-color), transparent 90%);
+}
+
+html.dark .task-card.distant {
+  background-color: color-mix(in srgb, var(--task-color), transparent 95%);
 }

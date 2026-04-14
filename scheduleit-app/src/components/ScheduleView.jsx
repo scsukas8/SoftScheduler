@@ -1,21 +1,42 @@
 import React from 'react';
+import { calculateTimeRemaining } from '@scheduleit/core';
 import { useTransition, animated } from '@react-spring/web';
 import TaskCard from './TaskCard';
 
-export default function ScheduleView({ tasks, onCompleteTask, onEditTask }) {
+export default function ScheduleView({ tasks, onCompleteTask, onEditTask, onScheduleTask }) {
   // Local state to track items that should be 'leaving' the list
   const [cooldownIds, setCooldownIds] = React.useState(new Set());
 
   // Sort tasks by time remaining (most overdue/urgent first)
   const sortedTasks = React.useMemo(() => {
     return [...tasks].sort((a, b) => {
-      const getTargetTime = (task) => {
-        const completedDate = (task.completed_at && typeof task.completed_at.toDate === 'function') 
-          ? task.completed_at.toDate() 
-          : new Date(task.completed_at || Date.now());
-        return completedDate.getTime() + (task.interval_days || 1) * 24 * 60 * 60 * 1000;
+      const aInfo = calculateTimeRemaining(a.completed_at, a.interval_days, a.scheduled_date, a.wiggle_room, a.wiggle_type);
+      const bInfo = calculateTimeRemaining(b.completed_at, b.interval_days, b.scheduled_date, b.wiggle_room, b.wiggle_type);
+      
+      const getPriority = (info) => {
+        // Tier 0: Overdue or Due Now (unlocked)
+        if (info.windowEndDiff < 0 || (info.windowStartDiff <= 0 && !info.isScheduled)) return 0;
+        // Tier 1: Scheduled (locked commitment)
+        if (info.isScheduled) return 1;
+        // Tier 2: Soon (unlocked, next 7 days)
+        if (info.windowStartDiff <= 7) return 2;
+        // Tier 3: Distant
+        return 3;
       };
-      return getTargetTime(a) - getTargetTime(b);
+
+      const aPrior = getPriority(aInfo);
+      const bPrior = getPriority(bInfo);
+
+      if (aPrior !== bPrior) return aPrior - bPrior;
+
+      // Internal sorting within the same tier
+      if (aPrior <= 1) {
+        // Overdue, Due, or Scheduled: sort by deadline/lock-date
+        return aInfo.windowEndDiff - bInfo.windowEndDiff;
+      } else {
+        // Soon or Distant: sort by horizon (first possible day)
+        return aInfo.windowStartDiff - bInfo.windowStartDiff;
+      }
     });
   }, [tasks]);
 
@@ -61,6 +82,7 @@ export default function ScheduleView({ tasks, onCompleteTask, onEditTask }) {
               task={task} 
               onComplete={() => handleCompleteWithCooldown(task.id)}
               onEdit={onEditTask}
+              onSchedule={onScheduleTask}
             />
           </animated.div>
         ))}

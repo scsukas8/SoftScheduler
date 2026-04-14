@@ -22,7 +22,13 @@ const WATER_DROP_DIRECTIONS = [
 ];
 
 // The popup gesture menu for a specific day
-function RoundaboutMenu({ tasks, position, onClose, onComplete, onAddTask }) {
+function RoundaboutMenu({ tasks, position, onClose, onComplete, onSchedule, onAddTask }) {
+  const isFuture = useMemo(() => {
+    const day = new Date(position.id);
+    const today = new Date();
+    today.setHours(0,0,0,0);
+    return day > today;
+  }, [position.id]);
   const [activeTask, setActiveTask] = useState(null);
   const [selectedId, setSelectedId] = useState(null);
   const [isClosing, setIsClosing] = useState(false);
@@ -122,6 +128,8 @@ function RoundaboutMenu({ tasks, position, onClose, onComplete, onAddTask }) {
         setTimeout(() => {
           if (closest === 'create') {
             onAddTask();
+          } else if (isFuture) {
+            onSchedule(closest, position.id);
           } else {
             onComplete(closest);
           }
@@ -156,6 +164,9 @@ function RoundaboutMenu({ tasks, position, onClose, onComplete, onAddTask }) {
           top: position.y 
         }}
       >
+        <div className={`roundabout-header ${isFuture ? 'is-future' : ''}`}>
+          {isFuture ? '📅 Schedule Task' : '✅ Complete Task'}
+        </div>
         {/* Render the bubbles */}
         {bubblePositions.map((bp) => {
           const id = bp.isCreate ? 'create' : bp.task.id;
@@ -174,6 +185,7 @@ function RoundaboutMenu({ tasks, position, onClose, onComplete, onAddTask }) {
                 setSelectedId(id);
                 setTimeout(() => {
                   if (bp.isCreate) onAddTask();
+                  else if (isFuture) onSchedule(bp.task.id, position.id);
                   else onComplete(bp.task.id);
                   onClose(); // Sync with 1.0s CSS animation end
                 }, 500);
@@ -289,7 +301,7 @@ function Bubble({ bp, isActive, isSelected, isFadingOut, onClick }) {
   );
 }
 
-export default function CalendarView({ tasks, onCompleteTask, onEditTask }) {
+export default function CalendarView({ tasks, onCompleteTask, onEditTask, onScheduleTask }) {
   const [activeDay, setActiveDay] = useState(null); // { id, x, y }
 
   // 14 day view (7 columns, 2 rows) - Starting 3 days in the past
@@ -316,15 +328,19 @@ export default function CalendarView({ tasks, onCompleteTask, onEditTask }) {
 
       if (isNaN(completedAt.getTime())) return;
 
-      const { daysRemaining } = calculateTimeRemaining(completedAt, task.interval_days);
-      const wiggle = parseInt(task.wiggle_room || 0, 10);
-      const isLateOnly = task.wiggle_type === 'late-only';
+      const { windowStartDiff, windowEndDiff } = calculateTimeRemaining(
+        completedAt, 
+        task.interval_days, 
+        task.scheduled_date,
+        task.wiggle_room,
+        task.wiggle_type
+      );
       
       // If more than 3 days overdue, it disappears
-      if (daysRemaining < -3) return;
+      if (windowEndDiff < -3) return;
 
-      const startDayIdx = isLateOnly ? (3 + daysRemaining) : (3 + daysRemaining - wiggle);
-      const endDayIdx = 3 + daysRemaining + wiggle;
+      const startDayIdx = 3 + windowStartDiff;
+      const endDayIdx = 3 + windowEndDiff;
       
       const completedDayStr = completedAt.toISOString().split('T')[0];
 
@@ -338,7 +354,7 @@ export default function CalendarView({ tasks, onCompleteTask, onEditTask }) {
           map[day.toISOString()].push({ 
             ...task, 
             isHistorical: !isActive && isHistorical,
-            isOverdue: daysRemaining < 0 && index === (3 + daysRemaining)
+            isOverdue: windowEndDiff < 0 && index === (3 + windowEndDiff)
           });
         }
       });
@@ -413,6 +429,7 @@ export default function CalendarView({ tasks, onCompleteTask, onEditTask }) {
           position={activeDay}
           onClose={() => setActiveDay(null)}
           onComplete={(taskId) => onCompleteTask(taskId, activeDay.id)}
+          onSchedule={onScheduleTask}
           onAddTask={() => onEditTask(null, activeDay.id)}
         />
       )}

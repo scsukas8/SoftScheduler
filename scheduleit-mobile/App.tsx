@@ -153,9 +153,39 @@ export default function App() {
         newCompletedAt = new Date(currentCompletedAt.getTime() + task.interval_days * 24 * 60 * 60 * 1000);
       }
 
-      await updateTask(user.uid, taskId, { completed_at: newCompletedAt.toISOString() });
+      await updateTask(user.uid, taskId, { 
+        completed_at: newCompletedAt.toISOString(),
+        scheduled_date: null // Clear override upon completion
+      });
     } catch (err) {
       console.error("Complete task error:", err);
+    }
+  };
+
+  const handleScheduleTask = async (taskId: string, chosenDate: string, mode: 'lock' | 'reschedule' = 'lock') => {
+    try {
+      if (!user) return;
+      const task = tasks.find(t => t.id === taskId);
+      if (task) {
+        showUndo(JSON.parse(JSON.stringify(task)));
+
+        if (mode === 'reschedule') {
+          const interval = task.interval_days || 1;
+          const targetDate = new Date(chosenDate);
+          const newCompletedAt = new Date(targetDate.getTime() - interval * 24 * 60 * 60 * 1000);
+          
+          await updateTask(user.uid, taskId, { 
+            completed_at: newCompletedAt.toISOString(),
+            scheduled_date: null
+          });
+        } else {
+          await updateTask(user.uid, taskId, { 
+            scheduled_date: chosenDate
+          });
+        }
+      }
+    } catch (err) {
+      console.error("Schedule task error:", err);
     }
   };
 
@@ -185,7 +215,10 @@ export default function App() {
     try {
       if (!user) return;
       if (editingTask?.task?.id) {
-        await updateTask(user.uid, editingTask.task.id, taskData);
+        await updateTask(user.uid, editingTask.task.id, {
+          ...taskData,
+          scheduled_date: null
+        });
       } else {
         await addTask(user.uid, taskData);
       }
@@ -255,6 +288,7 @@ export default function App() {
                 <ScheduleScreen 
                   tasks={tasks} 
                   onCompleteTask={handleCompleteTask}
+                  onScheduleTask={handleScheduleTask}
                   onEditTask={(task: any) => setEditingTask({ task })}
                 />
               )} 
@@ -265,6 +299,7 @@ export default function App() {
                 <CalendarScreen 
                   tasks={tasks} 
                   onCompleteTask={handleCompleteTask}
+                  onScheduleTask={handleScheduleTask}
                   onEditTask={(task: any, dayId: string) => setEditingTask({ task, dayId })}
                 />
               )} 
@@ -292,14 +327,14 @@ export default function App() {
         )}
 
         {undoItem && (
-          <RNAnimated.View style={[styles.undoToast, { 
+          <Animated.View style={[styles.undoToast, { 
             transform: [{ translateY: undoAnim.interpolate({
               inputRange: [0, 1],
               outputRange: [100, 0]
             }) }]
-          }]}>
+          }] as any}>
             <Text style={styles.undoText}>Task {undoItem.task.name} completed</Text>
-          </RNAnimated.View>
+          </Animated.View>
         )}
 
         {editingTask && (

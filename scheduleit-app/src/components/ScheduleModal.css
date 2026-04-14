@@ -1,0 +1,49 @@
+.schedule-modal {
+  max-width: 480px !important;
+}
+
+.schedule-modal .modal-header {
+  background-color: rgba(168, 85, 247, 0.1); /* Subtle tint */
+  margin: -32px -32px 24px -32px; /* Pull to edges */
+  padding: 24px 32px;
+  border-bottom: 1px solid var(--border-color);
+  border-top-left-radius: var(--radius-lg);
+  border-top-right-radius: var(--radius-lg);
+}
+
+.task-preview {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 16px;
+  background-color: var(--input-bg);
+  border-radius: var(--radius-md);
+  margin-bottom: 24px;
+}
+
+.task-indicator {
+  width: 12px;
+  height: 48px;
+  border-radius: var(--radius-pill);
+}
+
+.task-info {
+  flex: 1;
+}
+
+.task-info h3 {
+  margin: 0 0 4px 0;
+  font-size: 1.1rem;
+}
+
+.task-info p {
+  margin: 0;
+  font-size: 0.9rem;
+  color: var(--text-secondary);
+}
+
+/* Remove modal-specific input overrides to use global ones */
+
+.dark .task-preview {
+  background-color: rgba(0, 0, 0, 0.2);
+}
