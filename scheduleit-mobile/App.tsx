@@ -19,6 +19,9 @@ import ScheduleScreen from './src/components/ScheduleView';
 import CalendarScreen from './src/components/CalendarScreen';
 import NewTaskForm from './src/components/NewTaskForm';
 
+// Notification Services
+import { registerForPushNotificationsAsync, scheduleMorningBriefing } from './src/services/notificationService';
+
 const Tab = createBottomTabNavigator();
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
@@ -33,9 +36,13 @@ export default function App() {
   const undoAnim = useRef(new RNAnimated.Value(0)).current;
 
   useEffect(() => {
-    GoogleSignin.configure({
-      webClientId: '1073857724039-m5pmn570j6l7l4vokiaov83pj3c3t6qd.apps.googleusercontent.com',
-    });
+    try {
+      GoogleSignin.configure({
+        webClientId: '1073857724039-m5pmn570j6l7l4vokiaov83pj3c3t6qd.apps.googleusercontent.com',
+      });
+    } catch (e) {
+      console.error("GoogleSignin.configure failed:", e);
+    }
 
     const unsubscribeAuth = onAuthStateChanged(auth, (currentUser) => {
       setUser(currentUser);
@@ -50,11 +57,38 @@ export default function App() {
       setTasks([]);
       return;
     }
-    const unsubscribeTasks = subscribeTasks(user.uid, (taskList) => {
+    const unsubscribeTasks = subscribeTasks(user.uid, (taskList: any[]) => {
       setTasks(taskList);
     });
     return () => unsubscribeTasks();
   }, [user]);
+
+  // Notifications Integration
+  useEffect(() => {
+    const initNotifications = async () => {
+      if (user) {
+        try {
+          await registerForPushNotificationsAsync();
+        } catch (e) {
+          console.error("Notification registration crash prevented:", e);
+        }
+      }
+    };
+    initNotifications();
+  }, [user]);
+
+  useEffect(() => {
+    const updateBriefing = async () => {
+      if (user && tasks.length > 0) {
+        try {
+          await scheduleMorningBriefing(tasks);
+        } catch (e) {
+          console.error("Morning briefing schedule crash prevented:", e);
+        }
+      }
+    };
+    updateBriefing();
+  }, [tasks, user]);
 
   useEffect(() => {
     if (undoItem) {
@@ -83,6 +117,7 @@ export default function App() {
       await signInWithCredential(auth, googleCredential);
     } catch (error) {
       console.error("Google Signin Error:", error);
+    } finally {
       setLoading(false);
     }
   };
