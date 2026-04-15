@@ -1,6 +1,7 @@
 :root {
   /* Core Colors - Light Mode */
   --bg-primary: #f8f9fa;
+  --bg-primary-rgb: 248, 249, 250;
   --bg-secondary: #ffffff;
   --text-primary: #2d3142;
   --text-secondary: #7e8299;
@@ -8,15 +9,21 @@
   
   /* Input & Card backgrounds */
   --card-bg: #ffffff;
+  --card-bg-rgb: 255, 255, 255;
   --input-bg: #f3f4f6;
 
   /* Task Colors - Soft, complementary, vibrant but easy on eyes */
   --color-green: #34d399; /* Emerald 400 */
+  --color-green-rgb: 52, 211, 153;
   --color-pink: #f472b6;  /* Pink 400 */
+  --color-pink-rgb: 244, 114, 182;
   --color-blue: #60a5fa;  /* Blue 400 */
+  --color-blue-rgb: 96, 165, 250;
   --color-purple: #c084fc; /* Purple 400 */
+  --color-purple-rgb: 192, 132, 252;
   --color-orange: #fb923c; /* Orange 400 */
-  --color-peach: #fca5a5;  /* Red 300 */
+  --color-red: #fca5a5;  /* Red 300 */
+  --color-red-rgb: 252, 165, 165;
   
   /* UI Elements */
   --shadow-soft: 0 4px 20px rgba(0, 0, 0, 0.05);
@@ -37,6 +44,7 @@
 html.dark {
   /* Core Colors - Dark Mode */
   --bg-primary: #121214;
+  --bg-primary-rgb: 18, 18, 20;
   --bg-secondary: #1a1a1e;
   --text-primary: #e4e4e7;
   --text-secondary: #a1a1aa;
@@ -44,15 +52,21 @@ html.dark {
   
   /* Input & Card backgrounds */
   --card-bg: #1a1a1e;
+  --card-bg-rgb: 26, 26, 30;
   --input-bg: #27272a;
 
   /* Task Colors - Slightly adjusted for dark mode contrast */
   --color-green: #10b981; /* Emerald 500 */
+  --color-green-rgb: 16, 185, 129;
   --color-pink: #ec4899;  /* Pink 500 */
+  --color-pink-rgb: 236, 72, 153;
   --color-blue: #3b82f6;  /* Blue 500 */
+  --color-blue-rgb: 59, 130, 246;
   --color-purple: #a855f7; /* Purple 500 */
+  --color-purple-rgb: 168, 85, 247;
   --color-orange: #f97316; /* Orange 500 */
-  --color-peach: #ef4444;  /* Red 500 */
+  --color-red: #ef4444;  /* Red 500 */
+  --color-red-rgb: 239, 68, 68;
 
   /* UI Elements */
   --shadow-soft: 0 4px 20px rgba(0, 0, 0, 0.3);
@@ -90,9 +104,13 @@ body {
   flex-direction: column;
   min-height: 100vh;
   width: 100%;
+}
+
+.dashboard-container {
   max-width: 800px;
   margin: 0 auto;
   padding: 24px;
+  width: 100%;
 }
 
 h1, h2, h3, h4, h5, h6 {
