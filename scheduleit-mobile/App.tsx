@@ -32,7 +32,7 @@ export default function App() {
   const [editingTask, setEditingTask] = useState<{ task: any; dayId?: string } | null>(null);
   
   // Undo Logic
-  const [undoItem, setUndoItem] = useState<{task: any, timeoutId: any} | null>(null);
+  const [undoItem, setUndoItem] = useState<{ task: any, timeoutId: any, action?: string } | null>(null);
   const undoAnim = useRef(new RNAnimated.Value(0)).current;
 
   useEffect(() => {
@@ -122,23 +122,21 @@ export default function App() {
     }
   };
 
-  const showUndo = (task: any) => {
+  const showUndo = (task: any, action: string = 'completed') => {
     if (undoItem?.timeoutId) clearTimeout(undoItem.timeoutId);
     
     const timeoutId = setTimeout(() => {
       setUndoItem(null);
     }, 5000);
     
-    setUndoItem({ task, timeoutId });
+    setUndoItem({ task, timeoutId, action });
   };
 
   const handleCompleteTask = async (taskId: string) => {
     try {
       const task = tasks.find(t => t.id === taskId);
-      if (!task || !user) return;
-      
       const originalTask = JSON.parse(JSON.stringify(task));
-      showUndo(originalTask);
+      showUndo(originalTask, 'completed');
 
       const now = new Date();
       const currentCompletedAt = (task.completed_at && typeof task.completed_at.toDate === 'function') 
@@ -167,7 +165,7 @@ export default function App() {
       if (!user) return;
       const task = tasks.find(t => t.id === taskId);
       if (task) {
-        showUndo(JSON.parse(JSON.stringify(task)));
+        showUndo(JSON.parse(JSON.stringify(task)), 'scheduled');
 
         if (mode === 'reschedule') {
           const interval = task.interval_days || 1;
@@ -327,14 +325,14 @@ export default function App() {
         )}
 
         {undoItem && (
-          <Animated.View style={[styles.undoToast, { 
+          <RNAnimated.View style={[styles.undoToast, { 
             transform: [{ translateY: undoAnim.interpolate({
               inputRange: [0, 1],
               outputRange: [100, 0]
             }) }]
           }] as any}>
-            <Text style={styles.undoText}>Task {undoItem.task.name} completed</Text>
-          </Animated.View>
+            <Text style={styles.undoText}>Task {undoItem.task.name} {undoItem.action || 'completed'}</Text>
+          </RNAnimated.View>
         )}
 
         {editingTask && (
