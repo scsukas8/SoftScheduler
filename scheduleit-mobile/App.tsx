@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { StatusBar } from 'expo-status-bar';
-import { StyleSheet, Text, View, ActivityIndicator, TouchableOpacity, SafeAreaView, Platform, Animated as RNAnimated, Dimensions } from 'react-native';
+import { StyleSheet, Text, View, ActivityIndicator, TouchableOpacity, Platform, Animated as RNAnimated, Dimensions, Modal, Switch, useColorScheme, Appearance } from 'react-native';
+import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 import { NavigationContainer } from '@react-navigation/native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
@@ -13,6 +14,7 @@ import { onAuthStateChanged, signInWithCredential, GoogleAuthProvider, User } fr
 
 // Native Google Sign In
 import { GoogleSignin } from '@react-native-google-signin/google-signin';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 // Real Components
 import ScheduleScreen from './src/components/ScheduleView';
@@ -35,6 +37,10 @@ export default function App() {
   const [undoItem, setUndoItem] = useState<{ task: any, timeoutId: any, action?: string } | null>(null);
   const undoAnim = useRef(new RNAnimated.Value(0)).current;
 
+  const [isSettingsVisible, setIsSettingsVisible] = useState(false);
+  const colorScheme = useColorScheme();
+  const isDark = colorScheme === 'dark';
+
   useEffect(() => {
     try {
       GoogleSignin.configure({
@@ -43,6 +49,16 @@ export default function App() {
     } catch (e) {
       console.error("GoogleSignin.configure failed:", e);
     }
+
+    const loadTheme = async () => {
+      try {
+        const savedTheme = await AsyncStorage.getItem('theme_pref');
+        if (savedTheme === 'dark' || savedTheme === 'light') {
+          Appearance.setColorScheme(savedTheme);
+        }
+      } catch (e) {}
+    };
+    loadTheme();
 
     const unsubscribeAuth = onAuthStateChanged(auth, (currentUser) => {
       setUser(currentUser);
@@ -123,31 +139,28 @@ export default function App() {
   };
 
   const showUndo = (task: any, action: string = 'completed') => {
-    if (undoItem?.timeoutId) clearTimeout(undoItem.timeoutId);
-    
-    const timeoutId = setTimeout(() => {
-      setUndoItem(null);
-    }, 5000);
-    
-    setUndoItem({ task, timeoutId, action });
+    setUndoItem({ task, timeoutId: null, action });
   };
 
-  const handleCompleteTask = async (taskId: string) => {
+  const handleCompleteTask = async (taskId: string, dayId?: string) => {
     try {
       const task = tasks.find(t => t.id === taskId);
-      const originalTask = JSON.parse(JSON.stringify(task));
-      showUndo(originalTask, 'completed');
+      // Shallow clone avoids mutating references but preserves pure Firebase Timestamp objects
+      // JSON.parse(JSON.stringify()) corrupts Timestamps into POJOs, causing updateDoc to throw silent errors.
+      showUndo({ ...task }, 'completed');
 
       const now = new Date();
+      const actionDate = dayId ? new Date(dayId) : now;
+      
       const currentCompletedAt = (task.completed_at && typeof task.completed_at.toDate === 'function') 
         ? task.completed_at.toDate() 
         : new Date(task.completed_at || now);
       
       const currentTargetDate = new Date(currentCompletedAt.getTime() + task.interval_days * 24 * 60 * 60 * 1000);
       
-      let newCompletedAt = now;
+      let newCompletedAt = actionDate;
       // If task is already completed for the current interval, push to next
-      if (currentTargetDate > now) {
+      if (currentTargetDate > now && !dayId) {
         newCompletedAt = new Date(currentCompletedAt.getTime() + task.interval_days * 24 * 60 * 60 * 1000);
       }
 
@@ -165,7 +178,7 @@ export default function App() {
       if (!user) return;
       const task = tasks.find(t => t.id === taskId);
       if (task) {
-        showUndo(JSON.parse(JSON.stringify(task)), 'scheduled');
+        showUndo({ ...task }, 'scheduled');
 
         if (mode === 'reschedule') {
           const interval = task.interval_days || 1;
@@ -190,18 +203,12 @@ export default function App() {
   const handleUndo = async () => {
     if (!undoItem || !user) return;
     try {
-      const { id, created_at, ...taskData } = undoItem.task;
-      const taskExists = tasks.some(t => t.id === id);
+      const { id, ...fullTaskData } = undoItem.task;
       
-      if (taskExists) {
-        // Just revert the fields, but don't try to update immutable created_at
-        await updateTask(user.uid, id, taskData);
-      } else {
-        // Re-create the deleted task
-        // Note: created_at from snapshot might be a string, but setTask will 
-        // write it back as is. If rules allow, it will restore the task.
-        await setTask(user.uid, id, { ...taskData, created_at });
-      }
+      // Override the physical document completely with the exact pure state 
+      // instead of using a differential update, which guarantees any newly inserted properties 
+      // (e.g. scheduled_date) are physically cleared from the database on reversion.
+      await setTask(user.uid, id, fullTaskData);
       
       setUndoItem(null);
     } catch (err) {
@@ -229,8 +236,7 @@ export default function App() {
   const handleDeleteTask = async (task: any) => {
     if (!user) return;
     try {
-      const originalTask = JSON.parse(JSON.stringify(task));
-      showUndo(originalTask);
+      showUndo({ ...task });
       await deleteTask(user.uid, task.id);
       setEditingTask(null);
     } catch (err) {
@@ -259,14 +265,42 @@ export default function App() {
     );
   }
 
+  const toggleTheme = async () => {
+    const newTheme = isDark ? 'light' : 'dark';
+    Appearance.setColorScheme(newTheme);
+    try {
+      await AsyncStorage.setItem('theme_pref', newTheme);
+    } catch (e) {}
+  };
+
+  const handleSignOut = async () => {
+    try {
+      await auth.signOut();
+      await GoogleSignin.signOut();
+      setIsSettingsVisible(false);
+    } catch (error) {
+      console.error("Sign out error:", error);
+    }
+  };
+
   return (
-    <GestureHandlerRootView style={{ flex: 1 }}>
-      <SafeAreaView style={styles.safeArea}>
+    <SafeAreaProvider>
+      <GestureHandlerRootView style={{ flex: 1, backgroundColor: isDark ? '#1E1E1E' : '#f8f9fa' }}>
+        <SafeAreaView style={[styles.safeArea, { backgroundColor: isDark ? '#1E1E1E' : '#f8f9fa' }]}>
+        
+        {/* Top Header Row for Settings */}
+        <View style={styles.topHeader}>
+          <Text style={[styles.topTitle, { color: isDark ? '#fff' : '#222' }]}>SoftSchedule</Text>
+          <TouchableOpacity onPress={() => setIsSettingsVisible(true)}>
+            <Ionicons name="person-circle-outline" size={32} color={isDark ? '#fff' : '#222'} />
+          </TouchableOpacity>
+        </View>
+
         <NavigationContainer>
           <Tab.Navigator 
             screenOptions={({ route }) => ({
               headerShown: false,
-              tabBarStyle: styles.tabBar,
+              tabBarStyle: [styles.tabBar, { backgroundColor: isDark ? '#1E1E1E' : '#fff', borderTopColor: isDark ? '#333' : '#ddd' }],
               tabBarActiveTintColor: '#a48cff',
               tabBarInactiveTintColor: '#888',
               tabBarIcon: ({ focused, color, size }) => {
@@ -298,7 +332,7 @@ export default function App() {
                   tasks={tasks} 
                   onCompleteTask={handleCompleteTask}
                   onScheduleTask={handleScheduleTask}
-                  onEditTask={(task: any, dayId: string) => setEditingTask({ task, dayId })}
+                  onEditTask={(task: any, dayId?: string) => setEditingTask({ task, dayId })}
                 />
               )} 
             />
@@ -308,10 +342,7 @@ export default function App() {
         {!editingTask && (
           <View style={styles.fabContainer}>
             {undoItem && (
-              <TouchableOpacity 
-                style={styles.undoFab} 
-                onPress={handleUndo}
-              >
+              <TouchableOpacity style={styles.undoFab} onPress={handleUndo}>
                 <Ionicons name="refresh-outline" size={30} color="#a48cff" />
               </TouchableOpacity>
             )}
@@ -324,16 +355,6 @@ export default function App() {
           </View>
         )}
 
-        {undoItem && (
-          <RNAnimated.View style={[styles.undoToast, { 
-            transform: [{ translateY: undoAnim.interpolate({
-              inputRange: [0, 1],
-              outputRange: [100, 0]
-            }) }]
-          }] as any}>
-            <Text style={styles.undoText}>Task {undoItem.task.name} {undoItem.action || 'completed'}</Text>
-          </RNAnimated.View>
-        )}
 
         {editingTask && (
           <NewTaskForm 
@@ -345,9 +366,39 @@ export default function App() {
             onDelete={handleDeleteTask}
           />
         )}
-        <StatusBar style="auto" />
+
+        {/* Settings Modal */}
+        <Modal visible={isSettingsVisible} animationType="slide" transparent={true} onRequestClose={() => setIsSettingsVisible(false)}>
+          <View style={styles.modalOverlay}>
+            <View style={[styles.settingsContent, { backgroundColor: isDark ? '#2A2A2A' : '#fff' }]}>
+              <View style={styles.settingsHeader}>
+                <Text style={[styles.settingsTitle, { color: isDark ? '#fff' : '#000' }]}>Settings</Text>
+                <TouchableOpacity onPress={() => setIsSettingsVisible(false)}>
+                  <Ionicons name="close" size={28} color={isDark ? '#888' : '#555'} />
+                </TouchableOpacity>
+              </View>
+
+              <View style={styles.settingsRow}>
+                <Text style={[styles.settingsLabel, { color: isDark ? '#ccc' : '#333' }]}>Dark Mode</Text>
+                <Switch 
+                  value={isDark} 
+                  onValueChange={toggleTheme} 
+                  trackColor={{ false: '#767577', true: '#a48cff' }}
+                  thumbColor={isDark ? '#fff' : '#f4f3f4'}
+                />
+              </View>
+
+              <TouchableOpacity style={styles.signOutBtn} onPress={handleSignOut}>
+                <Text style={styles.signOutText}>Sign Out</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </Modal>
+
+        <StatusBar style={isDark ? "light" : "dark"} />
       </SafeAreaView>
     </GestureHandlerRootView>
+    </SafeAreaProvider>
   );
 }
 
@@ -441,31 +492,70 @@ const styles = StyleSheet.create({
     fontWeight: '400',
     marginTop: -2
   },
-  undoToast: {
-    position: 'absolute',
-    bottom: 110,
-    left: 20,
-    width: SCREEN_WIDTH - 150, // Avoid overlapping with FABs
-    backgroundColor: '#333',
-    borderRadius: 12,
-    padding: 16,
-    flexDirection: 'row',
-    alignItems: 'center',
-    elevation: 10,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.3,
-    shadowRadius: 4,
-  },
-  undoText: {
-    color: '#fff',
-    fontSize: 14,
-    flex: 1
-  },
   undoActionText: {
     color: '#a48cff',
     fontSize: 14,
     fontWeight: 'bold',
     marginLeft: 10
+  },
+  topHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 20,
+    paddingTop: Platform.OS === 'android' ? 10 : 0,
+    paddingBottom: 10
+  },
+  topTitle: {
+    fontSize: 20,
+    fontWeight: '800'
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  settingsContent: {
+    width: '80%',
+    borderRadius: 20,
+    padding: 24,
+    elevation: 5,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 4,
+  },
+  settingsHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 24,
+  },
+  settingsTitle: {
+    fontSize: 24,
+    fontWeight: 'bold',
+  },
+  settingsRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 24,
+  },
+  settingsLabel: {
+    fontSize: 18,
+  },
+  signOutBtn: {
+    backgroundColor: 'rgba(255, 60, 60, 0.1)',
+    padding: 16,
+    borderRadius: 12,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 60, 60, 0.3)',
+  },
+  signOutText: {
+    color: '#ff6b6b',
+    fontWeight: 'bold',
+    fontSize: 16,
   }
 });

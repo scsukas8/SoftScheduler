@@ -59,6 +59,10 @@ export const scheduleMorningBriefing = async (tasks: any[]) => {
   try {
     if (!Notifications) return;
 
+    // Prevent SecurityExceptions by verifying permission before scheduling anything
+    const { status } = await Notifications.getPermissionsAsync();
+    if (status !== 'granted') return;
+
     // Cancel existing scheduled notifications to avoid duplicates and stale content
     await Notifications.cancelAllScheduledNotificationsAsync();
 
@@ -104,10 +108,9 @@ export const scheduleMorningBriefing = async (tasks: any[]) => {
         sound: true,
       },
       trigger: {
-        type: Notifications.SchedulableTriggerInputTypes.CALENDAR,
+        type: Notifications.SchedulableTriggerInputTypes.DAILY,
         hour: 8,
         minute: 0,
-        repeats: true,
       },
     });
 

@@ -1,5 +1,5 @@
 import React, { useMemo } from 'react';
-import { View, Text, StyleSheet } from 'react-native';
+import { View, Text, StyleSheet, useColorScheme } from 'react-native';
 import { calculateTimeRemaining } from '@scheduleit/core';
 import Animated, { FadeInUp, SlideOutRight, LinearTransition } from 'react-native-reanimated';
 import TaskCard from './TaskCard';
@@ -62,9 +62,11 @@ export default function ScheduleScreen({ tasks, onCompleteTask, onEditTask, onSc
     );
   };
 
+  const isDark = useColorScheme() === 'dark';
+
   return (
-    <View style={styles.container}>
-      <Text style={styles.header}>Schedule View</Text>
+    <View style={[styles.container, { backgroundColor: isDark ? '#1E1E1E' : '#f8f9fa' }]}>
+      <Text style={[styles.header, { color: isDark ? '#fff' : '#222' }]}>Schedule View</Text>
       
       {sortedTasks.length === 0 ? (
         <View style={styles.emptyState}>

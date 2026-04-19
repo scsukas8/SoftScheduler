@@ -1,5 +1,6 @@
 import React, { useMemo, useState, useEffect } from 'react';
-import { View, Text, StyleSheet, TouchableWithoutFeedback, Dimensions } from 'react-native';
+import { View, Text, StyleSheet, TouchableWithoutFeedback, Dimensions, Platform } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Animated, { 
   useSharedValue, 
   useAnimatedStyle, 
@@ -9,11 +10,27 @@ import Animated, {
   withSequence,
   withDelay,
   Easing,
-  useAnimatedReaction
+  useAnimatedReaction,
+  ZoomOut,
+  FadeOut
 } from 'react-native-reanimated';
 import { GestureDetector, Gesture } from 'react-native-gesture-handler';
-
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
+
+const COLOR_MAP: Record<string, string> = {
+  'var(--color-purple)': '#a48cff',
+  'var(--color-pink)': '#ff8ca4',
+  'var(--color-blue)': '#8ce1ff',
+  'var(--color-green)': '#8cffb6',
+  'var(--color-yellow)': '#ffdc8c',
+  'var(--color-orange)': '#ffb68c',
+  'var(--color-red)': '#ff8c8c',
+};
+
+const resolveColor = (color: string | undefined) => {
+  if (!color) return '#a48cff';
+  return COLOR_MAP[color] || color;
+};
 const RADIUS = SCREEN_WIDTH < 400 ? 65 : 80;
 
 const WATER_DROP_DIRECTIONS = [
@@ -36,9 +53,10 @@ export default function RoundaboutMenu({
   onComplete, 
   onSchedule,
   onAddTask,
-  externalTranslateX, // SharedValue from parent
-  externalTranslateY,  // SharedValue from parent
-  hoveredTaskSV       // SharedValue to sync back to parent
+  externalTranslateX, 
+  externalTranslateY,  
+  hoveredTaskSV,
+  externalCommittingId
 }) {
   const isFuture = useMemo(() => {
     const day = new Date(position.id);
@@ -50,6 +68,12 @@ export default function RoundaboutMenu({
   const [selectedId, setSelectedId] = useState(null);
   const [isClosing, setIsClosing] = useState(false);
 
+  useEffect(() => {
+    if (externalCommittingId) {
+      setSelectedId(externalCommittingId);
+    }
+  }, [externalCommittingId]);
+
   // Use external values or fallback for standalone use
   const translateX = externalTranslateX || useSharedValue(0);
   const translateY = externalTranslateY || useSharedValue(0);
@@ -59,12 +83,11 @@ export default function RoundaboutMenu({
   const scale = useSharedValue(0.5);
 
   useEffect(() => {
-    opacity.value = withSpring(1, { damping: 14, stiffness: 180 });
-    scale.value = withSpring(1, { damping: 14, stiffness: 180 });
+    opacity.value = withSpring(1, { damping: 25, stiffness: 450 });
+    scale.value = withSpring(1, { damping: 25, stiffness: 500 });
   }, []);
 
   const handleClose = () => {
-    setIsClosing(true);
     opacity.value = withTiming(0, { duration: 250 });
     scale.value = withTiming(0.8, { duration: 250 });
     setTimeout(onClose, 250);
@@ -158,10 +181,15 @@ export default function RoundaboutMenu({
     opacity: opacity.value,
   }));
 
+  const { top: safeAreaTop } = useSafeAreaInsets();
+  
+  // Account for the safe area padding PLUS the custom App.tsx topHeader we added
+  const headerHeight = Platform.OS === 'android' ? 52 : 42; 
+
   const containerStyle = useAnimatedStyle(() => ({
     transform: [{ scale: scale.value }],
     left: position.x,
-    top: position.y,
+    top: position.y - safeAreaTop - headerHeight,
   }));
 
   const knobStyle = useAnimatedStyle(() => ({
@@ -230,10 +258,7 @@ function Bubble({ bp, isActive, isSelected, isFadingOut, onTap }) {
   // Dynamic Scaling
   useEffect(() => {
     if (isSelected) {
-      scale.value = withSequence(
-        withSpring(2.2, { damping: 10, stiffness: 200 }),
-        withTiming(0.1, { duration: 150 })
-      );
+      scale.value = withTiming(0, { duration: 150 });
     } else {
       scale.value = withSpring(isActive ? 1.4 : 1, { damping: 12, stiffness: 350 });
     }
@@ -263,19 +288,17 @@ function Bubble({ bp, isActive, isSelected, isFadingOut, onTap }) {
     });
   }, [isSelected]);
 
-  const color = bp.isCreate ? '#a48cff' : bp.task.color;
+  const color = bp.isCreate ? '#a48cff' : resolveColor(bp.task.color);
 
   return (
     <>
-      {!isSelected && (
-        <TouchableWithoutFeedback onPress={onTap}>
-          <Animated.View style={[styles.bubble, bubbleStyle, { backgroundColor: color }]}>
-            <Text style={styles.bubbleText}>
-              {bp.isCreate ? '+' : bp.task.name.substring(0, 1).toUpperCase()}
-            </Text>
-          </Animated.View>
-        </TouchableWithoutFeedback>
-      )}
+      <TouchableWithoutFeedback onPress={!isSelected ? onTap : undefined}>
+        <Animated.View style={[styles.bubble, bubbleStyle, { backgroundColor: color }]}>
+          <Text style={styles.bubbleText}>
+            {bp.isCreate ? '+' : bp.task.name.substring(0, 1).toUpperCase()}
+          </Text>
+        </Animated.View>
+      </TouchableWithoutFeedback>
 
       {isSelected && droplets.map((rd, i) => (
         <Droplet key={i} config={rd} color={color} originX={bp.x} originY={bp.y} />
@@ -362,7 +385,7 @@ const styles = StyleSheet.create({
   },
   header: {
     position: 'absolute',
-    top: -RADIUS - 50,
+    top: -RADIUS - 70,
     alignSelf: 'center',
     backgroundColor: '#222', // Darker, more solid
     paddingVertical: 10,

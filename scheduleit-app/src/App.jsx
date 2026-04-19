@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import './App.css';
-import { auth, googleProvider } from './firebase';
-import { signInWithPopup, signOut, onAuthStateChanged } from 'firebase/auth';
+import { auth } from './firebase';
+import { signInWithPopup, signOut, onAuthStateChanged, GoogleAuthProvider } from 'firebase/auth';
 import Dashboard from './Dashboard';
 import LandingPage from './components/LandingPage';
 import LoginPage from './components/LoginPage';
@@ -36,8 +36,12 @@ function App() {
   }, []);
 
   const handleLogin = async () => {
+    console.log("handleLogin clicked", { auth });
     try {
-      await signInWithPopup(auth, googleProvider);
+      const provider = new GoogleAuthProvider();
+      console.log("attempting signInWithPopup...");
+      const result = await signInWithPopup(auth, provider);
+      console.log("signInWithPopup returned:", result);
     } catch (error) {
       console.error("Login Error:", error);
       alert(`Login failed: ${error.message || "Unknown error"}.`);

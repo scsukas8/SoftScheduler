@@ -1,5 +1,5 @@
-import React, { useMemo } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, useColorScheme } from 'react-native';
+import React, { useMemo, useState } from 'react';
+import { View, Text, StyleSheet, TouchableOpacity, useColorScheme, Dimensions } from 'react-native';
 import { calculateTimeRemaining, formatTimeRemaining } from '@scheduleit/core';
 import { Ionicons } from '@expo/vector-icons';
 import Animated, { 
@@ -11,7 +11,24 @@ import Animated, {
 } from 'react-native-reanimated';
 import { GestureDetector, Gesture } from 'react-native-gesture-handler';
 
-import { Alert } from 'react-native';
+import ScheduleModal from './ScheduleModal';
+
+const { width: SCREEN_WIDTH } = Dimensions.get('window');
+
+const COLOR_MAP: Record<string, string> = {
+  'var(--color-purple)': '#a48cff',
+  'var(--color-pink)': '#ff8ca4',
+  'var(--color-blue)': '#8ce1ff',
+  'var(--color-green)': '#8cffb6',
+  'var(--color-yellow)': '#ffdc8c',
+  'var(--color-orange)': '#ffb68c',
+  'var(--color-red)': '#ff8c8c',
+};
+
+const resolveColor = (color: string | undefined) => {
+  if (!color) return '#a48cff';
+  return COLOR_MAP[color] || color;
+};
 
 interface TaskCardProps {
   task: any;
@@ -62,44 +79,39 @@ export default function TaskCard({ task, onComplete, onEdit, onSchedule }: TaskC
     opacity: isDistant ? 0.6 : 1, // Consistent with web
   }));
 
-  const indicatorColor = isCritical ? '#ff6b6b' : isInRange ? '#ffd93d' : task.color || '#a48cff';
+  const taskColor = resolveColor(task.color);
 
-  // Tiered background logic
+  // Tiered background logic matching Web opacity levels (60% transparent = 40% opacity = '66')
   const getCardBg = () => {
-    if (isCritical || isInRange) return indicatorColor + '66'; // 40% opacity
-    if (isSoon) return indicatorColor + '1A'; // 10% opacity
-    return indicatorColor + (isDark ? '0D' : '08'); // 5% vs 3% tint (faded)
+    if (isCritical || isInRange) return taskColor + '66'; 
+    if (isSoon) return taskColor + '1A'; 
+    return taskColor + (isDark ? '0D' : '08'); 
   };
 
   const getBorderColor = () => {
-    return indicatorColor + '4D'; // 30% border
+    if (isCritical || isInRange) return taskColor + '66'; // Web says 40% transparent = 60% opacity = '99'. Let's stick with subtle borders
+    return taskColor + '4D'; // 30% border default
   };
 
   const isFullBg = false; // Toned down, so we treat it as light bg for text contrast
+  const [scheduleMode, setScheduleMode] = useState<null | 'lock' | 'reschedule'>(null);
 
   const handleSchedulePress = () => {
     const isReschedule = isCritical || isInRange;
-    Alert.alert(
-      isReschedule ? "Reschedule Window" : "Schedule Task",
-      isReschedule ? "Shift the entire wiggle window to a new day." : "Choose a day to lock this task to.",
-      [
-        { text: "Tomorrow", onPress: () => {
-          const d = new Date();
-          d.setDate(d.getDate() + 1);
-          onSchedule(task.id, d.toISOString(), isReschedule ? 'reschedule' : 'lock');
-        }},
-        { text: "In 3 Days", onPress: () => {
-          const d = new Date();
-          d.setDate(d.getDate() + 3);
-          onSchedule(task.id, d.toISOString(), isReschedule ? 'reschedule' : 'lock');
-        }},
-        { text: "Cancel", style: "cancel" }
-      ]
-    );
+    setScheduleMode(isReschedule ? 'reschedule' : 'lock');
   };
 
   return (
     <View style={styles.container}>
+      {scheduleMode && (
+        <ScheduleModal 
+          visible={!!scheduleMode}
+          task={task}
+          mode={scheduleMode}
+          onClose={() => setScheduleMode(null)}
+          onSchedule={onSchedule}
+        />
+      )}
       <GestureDetector gesture={dragGesture}>
         <Animated.View style={[
           styles.card, 
@@ -133,7 +145,7 @@ export default function TaskCard({ task, onComplete, onEdit, onSchedule }: TaskC
             
             {(isCritical || !isInRange) && (
               <TouchableOpacity style={styles.iconBtn} onPress={handleSchedulePress}>
-                <Ionicons name="calendar-outline" size={28} color={isSoon || isCritical ? indicatorColor : '#a48cff'} />
+                <Ionicons name="calendar-outline" size={28} color={isSoon || isCritical ? taskColor : '#a48cff'} />
               </TouchableOpacity>
             )}
 
@@ -142,7 +154,7 @@ export default function TaskCard({ task, onComplete, onEdit, onSchedule }: TaskC
                 <Ionicons 
                   name="checkmark-circle-outline" 
                   size={28} 
-                  color={indicatorColor} 
+                  color={taskColor} 
                 />
               </TouchableOpacity>
             )}
@@ -153,8 +165,6 @@ export default function TaskCard({ task, onComplete, onEdit, onSchedule }: TaskC
   );
 }
 
-import { Dimensions } from 'react-native';
-const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
 const styles = StyleSheet.create({
   container: {
