@@ -6,23 +6,24 @@
   display: grid;
   grid-template-columns: repeat(7, 1fr);
   grid-template-rows: repeat(2, 1fr);
-  gap: 0; /* Touching cells */
-  border-top: 1px solid var(--border-color);
-  border-left: 1px solid var(--border-color);
-  background-color: var(--card-bg);
-  border-radius: var(--radius-md);
+  width: 100%;
+  min-height: 500px;
+  border-radius: var(--radius-lg);
   overflow: hidden;
-  min-height: 480px; /* Take up vertical space */
+  gap: 8px; /* Desktop spacing */
+  background: transparent; /* Remove container background to see gaps */
+  border: none; /* Rely on individual cell borders */
 }
 
 .calendar-cell {
   position: relative;
-  border-right: 1px solid var(--border-color);
-  border-bottom: 1px solid var(--border-color);
   display: flex;
   flex-direction: column;
-  background-color: rgba(255, 255, 255, 0.03); /* Light background for all active/future days */
-  transition: opacity 0.2s, background-color 0.2s;
+  background-color: var(--card-bg);
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border-color);
+  transition: all 0.2s ease;
+  overflow: hidden; /* Ensure content follows rounded corners */
 }
 
 .calendar-cell.has-tasks .cell-hitbox {
@@ -235,37 +236,47 @@
   background: linear-gradient(135deg, var(--color-purple), var(--color-pink));
 }
 
-@media (max-width: 768px) {
+@media (max-width: 850px) {
   .calendar-view {
     width: 100%;
     margin: 0;
+    flex: 1; /* Take remaining space */
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
   }
   
   .calendar-grid-7x2 {
     display: grid !important;
     width: 100% !important;
+    height: 100% !important; /* Stretch to fill .calendar-view */
     min-width: unset;
     min-height: unset;
     grid-template-columns: repeat(3, 1fr) !important;
-    grid-template-rows: auto;
-    border-radius: var(--radius-sm); /* Tighten for mobile */
+    grid-template-rows: repeat(5, 1fr) !important; /* Distribute rows evenly */
+    border-radius: var(--radius-sm);
+    gap: 4px; /* Mobile spacing */
   }
   
   .cell-hitbox {
-    padding: 10px 4px;
-    min-height: 110px;
+    padding: 6px 2px;
+    height: 100%; /* Fill the grid row */
+    display: flex;
+    flex-direction: column;
   }
   
-  .day-name { font-size: 0.75rem; }
-  .day-num { font-size: 1.1rem; }
+  .day-name { font-size: 0.65rem; }
+  .day-num { font-size: 0.85rem; }
   
   .task-label {
-    font-size: 0.6rem;
-    padding: 1px 4px;
-    margin-bottom: 2px;
-    border-radius: 2px;
-    display: block; /* Force to take full width */
+    font-size: 0.55rem;
+    padding: 1px 3px;
+    margin-bottom: 1px;
+    border-radius: 1px;
+    display: block;
     max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
   }
 }
 

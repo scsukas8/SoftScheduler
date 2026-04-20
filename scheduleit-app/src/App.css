@@ -12,6 +12,22 @@
   margin-bottom: 2rem;
 }
 
+@media (max-width: 850px) {
+  .app-header {
+    margin-bottom: 0.75rem;
+    padding: 0 4px;
+    height: 48px;
+  }
+}
+
+@media (max-width: 600px) {
+  .app-header {
+    margin-bottom: 0.75rem;
+    padding: 0 4px;
+    height: 48px;
+  }
+}
+
 .app-header h1 {
   font-size: 2rem;
   letter-spacing: -0.5px;
@@ -20,6 +36,13 @@
   background-clip: text;
   -webkit-text-fill-color: transparent;
   margin: 0;
+}
+
+@media (max-width: 600px) {
+  .app-header h1 {
+    font-size: 1.25rem;
+    letter-spacing: -0.2px;
+  }
 }
 
 .view-toggle {
@@ -34,6 +57,12 @@
   border-radius: var(--radius-pill);
   font-weight: 500;
   color: var(--text-secondary);
+}
+
+@media (max-width: 850px) {
+  .view-toggle {
+    display: none !important;
+  }
 }
 
 .toggle-btn.active {
@@ -196,23 +225,127 @@
   transform: scale(1.05);
 }
 
-@media (max-width: 600px) {
+@media (max-width: 850px) {
   .fab-add {
-    bottom: 24px;
-    right: 24px;
+    bottom: 96px; /* High enough to clear bottom nav */
+    right: 20px;
     width: 60px;
     height: 60px;
   }
   
   .fab-undo {
-    bottom: 24px;
-    right: 100px; /* To the left of Add button */
+    bottom: 96px;
+    right: 90px;
     width: 60px;
     height: 60px;
   }
   
   .app-content {
-    padding-bottom: 110px; /* Slightly tighter on mobile */
+    flex: 1;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    padding-bottom: 80px; /* Space for bottom nav */
+    height: 100%; /* Ensure it fills available space */
+  }
+
+  .app-content h2 {
+    font-size: 1.1rem !important;
+    margin-bottom: 12px !important;
+    font-weight: 700;
+    color: var(--text-primary);
+  }
+
+  .app-logo {
+    display: flex !important;
+    align-items: center !important;
+    gap: 8px !important;
+  }
+  
+  .app-header h1 {
+     font-size: 1.25rem !important;
+     display: block !important;
+  }
+  
+  .app-logo svg {
+    width: 24px;
+    height: 24px;
   }
 }
 
+/* Mobile Bottom Nav Styles */
+.mobile-nav {
+  display: none;
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 80px;
+  background: rgba(var(--bg-secondary-rgb, 26, 26, 30), 0.85);
+  backdrop-filter: blur(12px);
+  border-top: 1px solid var(--border-color);
+  justify-content: space-around;
+  align-items: center;
+  padding-bottom: env(safe-area-inset-bottom);
+  z-index: 1000;
+  box-shadow: 0 -4px 20px rgba(0,0,0,0.1);
+}
+
+@media (max-width: 850px) {
+  .mobile-nav {
+    display: flex;
+  }
+}
+
+.mobile-nav-btn {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  color: var(--text-secondary);
+  flex: 1;
+  height: 100%;
+  transition: all 0.2s ease;
+}
+
+.mobile-nav-btn.active {
+  color: var(--color-purple);
+}
+
+.mobile-nav-btn span {
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+
+.mobile-nav-btn svg {
+  transition: transform 0.2s ease;
+}
+
+.mobile-nav-btn.active svg {
+  transform: scale(1.1);
+}
+
+/* Mobile ScheduleView Scoped Scrolling & UI Tightening */
+@media (max-width: 850px) {
+  .schedule-view {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    overflow: hidden;
+  }
+  
+  .schedule-view h2 {
+    font-size: 1.1rem !important;
+    margin-bottom: 12px !important;
+    font-weight: 700;
+  }
+  
+  .task-list {
+    flex: 1;
+    overflow-y: auto !important;
+    padding-bottom: 40px;
+    -webkit-overflow-scrolling: touch;
+    mask-image: linear-gradient(to bottom, transparent, black 10px, black calc(100% - 20px), transparent);
+  }
+}

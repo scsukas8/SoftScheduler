@@ -364,7 +364,7 @@ export default function CalendarView({ tasks, onCompleteTask, onEditTask, onSche
 
   return (
     <div className="calendar-view animate-fade-in">
-      <h2 style={{ marginBottom: '16px' }}>Upcoming 14 Days</h2>
+      <h2>Upcoming Schedule</h2>
       
       <div className="calendar-grid-7x2">
         {days.map((day, index) => {

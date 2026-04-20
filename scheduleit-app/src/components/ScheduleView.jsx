@@ -74,7 +74,7 @@ export default function ScheduleView({ tasks, onCompleteTask, onEditTask, onSche
 
   return (
     <div className="schedule-view animate-fade-in">
-      <h2 style={{ marginBottom: '24px' }}>Schedule View</h2>
+      <h2>Upcoming Schedule</h2>
       <div className="task-list" style={{ position: 'relative' }}>
         {transitions((style, task) => (
           <animated.div style={style}>
