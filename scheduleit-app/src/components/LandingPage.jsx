@@ -19,9 +19,7 @@ const LandingPage = ({ user, isDark, setIsDark }) => {
       <nav className={`landing-nav ${scrolled ? 'scrolled' : ''}`}>
         <div className="nav-container">
           <div className="nav-logo">
-            <svg viewBox="0 0 24 24" width="32" height="32" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/>
-            </svg>
+            <img src="/icon.png" alt="SoftSchedule Logo" style={{ width: '32px', height: '32px', marginRight: '10px' }} />
             <span>SoftSchedule</span>
           </div>
           <div className="nav-actions">
@@ -44,15 +42,7 @@ const LandingPage = ({ user, isDark, setIsDark }) => {
         </div>
         <div className="hero-content">
           <div className="hero-logo-large">
-            <svg viewBox="0 0 24 24" width="120" height="120" fill="none" stroke="url(#hero-grad)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <defs>
-                <linearGradient id="hero-grad" x1="0%" y1="0%" x2="100%" y2="100%">
-                  <stop offset="0%" stopColor="#ec4899" />
-                  <stop offset="100%" stopColor="#a855f7" />
-                </linearGradient>
-              </defs>
-              <path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/>
-            </svg>
+            <img src="/icon.png" alt="SoftSchedule Logo Large" style={{ width: '120px', height: '120px' }} />
           </div>
           <h1>SoftSchedule</h1>
           <p className="hero-subtitle">Soft scheduling for a calmer, more productive life.</p>

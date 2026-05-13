@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { StatusBar } from 'expo-status-bar';
-import { StyleSheet, Text, View, ActivityIndicator, TouchableOpacity, Platform, Animated as RNAnimated, Dimensions, Modal, Switch, useColorScheme, Appearance } from 'react-native';
+import { StyleSheet, Text, View, ActivityIndicator, TouchableOpacity, Platform, Animated as RNAnimated, Dimensions, Modal, Switch, useColorScheme, Appearance, Image } from 'react-native';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 import { NavigationContainer } from '@react-navigation/native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
@@ -20,6 +20,8 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import ScheduleScreen from './src/components/ScheduleView';
 import CalendarScreen from './src/components/CalendarScreen';
 import NewTaskForm from './src/components/NewTaskForm';
+import DateTimePicker from '@react-native-community/datetimepicker';
+const DateTimePickerAny = DateTimePicker as any;
 
 // Notification Services
 import { registerForPushNotificationsAsync, scheduleAllNotifications, sendTestNotification, sendBriefingTest } from './src/services/notificationService';
@@ -182,6 +184,7 @@ export default function App() {
         newCompletedAt = new Date(currentCompletedAt.getTime() + task.interval_days * 24 * 60 * 60 * 1000);
       }
 
+      if (!user) return;
       await updateTask(user.uid, taskId, { 
         completed_at: newCompletedAt.toISOString(),
         scheduled_date: null // Clear override upon completion
@@ -309,7 +312,13 @@ export default function App() {
         
         {/* Top Header Row for Settings */}
         <View style={styles.topHeader}>
-          <Text style={[styles.topTitle, { color: isDark ? '#fff' : '#222' }]}>SoftSchedule</Text>
+          <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+            <Image 
+              source={require('./assets/icon.png')} 
+              style={{ width: 28, height: 28, marginRight: 8, borderRadius: 6 }} 
+            />
+            <Text style={[styles.topTitle, { color: isDark ? '#fff' : '#222' }]}>SoftSchedule</Text>
+          </View>
           <TouchableOpacity onPress={() => setIsSettingsVisible(true)}>
             <Ionicons name="person-circle-outline" size={32} color={isDark ? '#fff' : '#222'} />
           </TouchableOpacity>
@@ -421,10 +430,10 @@ export default function App() {
 
                 {briefingEnabled && (
                   <TouchableOpacity 
-                    style={styles.settingsRow} 
+                    style={styles.settingsActionRow} 
                     onPress={() => setShowTimePicker(true)}
                   >
-                    <Text style={styles.settingsLabel}>Briefing Time</Text>
+                    <Text style={styles.settingsActionLabel}>Briefing Time</Text>
                     <Text style={styles.timeValue}>
                       {briefingHour.toString().padStart(2, '0')}:{briefingMinute.toString().padStart(2, '0')}
                     </Text>
@@ -432,12 +441,12 @@ export default function App() {
                 )}
 
                 {showTimePicker && (
-                  <DateTimePicker
+                  <DateTimePickerAny
                     value={new Date(new Date().setHours(briefingHour, briefingMinute))}
                     mode="time"
                     is24Hour={true}
                     display="default"
-                    onChange={(event, date) => {
+                    onChange={(event: any, date?: Date) => {
                       setShowTimePicker(false);
                       if (date) {
                         setBriefingHour(date.getHours());
@@ -633,7 +642,7 @@ const styles = StyleSheet.create({
     marginBottom: 20,
     width: '100%'
   },
-  settingsRow: {
+  settingsActionRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
@@ -641,7 +650,7 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: '#333'
   },
-  settingsLabel: {
+  settingsActionLabel: {
     color: '#fff',
     fontSize: 16
   },

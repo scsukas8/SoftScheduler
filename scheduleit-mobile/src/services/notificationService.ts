@@ -9,6 +9,8 @@ Notifications.setNotificationHandler({
     shouldShowAlert: true,
     shouldPlaySound: true,
     shouldSetBadge: false,
+    shouldShowBanner: true,
+    shouldShowList: true,
   }),
 });
 
@@ -142,7 +144,6 @@ export const scheduleAllNotifications = async (
                 title: `Task Reminder: ${task.name}`,
                 body: `Time to check on this task!`,
                 data: { taskId: task.id, type: 'TASK_REMINDER' },
-                android: { channelId: 'default' }
               },
               trigger: {
                 type: 'timeInterval',
@@ -179,10 +180,6 @@ export const scheduleAllNotifications = async (
           content: {
             title: "Your Morning Briefing",
             body: briefingBody,
-            android: { 
-              channelId: 'default',
-              priority: Notifications.AndroidNotificationPriority.HIGH,
-            }
           },
           trigger: {
             type: 'timeInterval',
@@ -210,10 +207,6 @@ export const sendBriefingTest = async (tasks: any[]) => {
       content: {
         title: "Your Morning Briefing (Test)",
         body: briefingBody,
-        android: { 
-          channelId: 'default',
-          priority: Notifications.AndroidNotificationPriority.HIGH,
-        }
       },
       trigger: null,
     });
@@ -229,7 +222,6 @@ export const sendTestNotification = async () => {
       content: {
         title: "Test Notification 🔔",
         body: "SoftSchedule notifications are working!",
-        android: { channelId: 'default' }
       },
       trigger: null,
     });

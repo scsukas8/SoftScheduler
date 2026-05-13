@@ -12,7 +12,8 @@ import Animated, {
   Easing,
   useAnimatedReaction,
   ZoomOut,
-  FadeOut
+  FadeOut,
+  SharedValue
 } from 'react-native-reanimated';
 import { GestureDetector, Gesture } from 'react-native-gesture-handler';
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
@@ -46,6 +47,19 @@ const WATER_DROP_DIRECTIONS = [
   { sx: -16, sy: 11, x: -60, y: 40 }
 ];
 
+interface RoundaboutMenuProps {
+  tasks: any[];
+  position: { id: string; x: number; y: number };
+  onClose: () => void;
+  onComplete: (taskId: string) => void;
+  onSchedule: (taskId: string, date: string) => void;
+  onAddTask: () => void;
+  externalTranslateX?: SharedValue<number>;
+  externalTranslateY?: SharedValue<number>;
+  hoveredTaskSV?: SharedValue<string | null>;
+  externalCommittingId?: string | null;
+}
+
 export default function RoundaboutMenu({ 
   tasks, 
   position, 
@@ -57,15 +71,15 @@ export default function RoundaboutMenu({
   externalTranslateY,  
   hoveredTaskSV,
   externalCommittingId
-}) {
+}: RoundaboutMenuProps) {
   const isFuture = useMemo(() => {
     const day = new Date(position.id);
     const today = new Date();
     today.setHours(0,0,0,0);
     return day > today;
   }, [position.id]);
-  const [activeTask, setActiveTask] = useState(null);
-  const [selectedId, setSelectedId] = useState(null);
+  const [activeTask, setActiveTask] = useState<string | null>(null);
+  const [selectedId, setSelectedId] = useState<string | null>(null);
   const [isClosing, setIsClosing] = useState(false);
 
   useEffect(() => {
@@ -79,17 +93,17 @@ export default function RoundaboutMenu({
   const translateY = externalTranslateY || useSharedValue(0);
   
   // Outer overlay entrance
-  const opacity = useSharedValue(0);
-  const scale = useSharedValue(0.5);
+  const opacity = useSharedValue<number>(0);
+  const scale = useSharedValue<number>(0.5);
 
   useEffect(() => {
-    opacity.value = withSpring(1, { damping: 25, stiffness: 450 });
-    scale.value = withSpring(1, { damping: 25, stiffness: 500 });
+    opacity.value = withSpring(1, { damping: 25, stiffness: 450 }) as any;
+    scale.value = withSpring(1, { damping: 25, stiffness: 500 }) as any;
   }, []);
 
   const handleClose = () => {
-    opacity.value = withTiming(0, { duration: 250 });
-    scale.value = withTiming(0.8, { duration: 250 });
+    opacity.value = withTiming(0, { duration: 250 }) as any;
+    scale.value = withTiming(0.8, { duration: 250 }) as any;
     setTimeout(onClose, 250);
   };
 
@@ -104,9 +118,9 @@ export default function RoundaboutMenu({
     if (!isLeftEdge && !isRightEdge) {
       const positions = tasks.map((task, i) => {
         const angle = PLUS_ANGLE + ((i + 1) * (Math.PI * 2)) / total;
-        return { id: task.id, task, x: Math.cos(angle) * RADIUS, y: Math.sin(angle) * RADIUS };
+        return { id: task.id, task, x: Math.cos(angle) * RADIUS, y: Math.sin(angle) * RADIUS, isCreate: false };
       });
-      positions.push({ id: 'create', isCreate: true, x: Math.cos(PLUS_ANGLE) * RADIUS, y: Math.sin(PLUS_ANGLE) * RADIUS });
+      positions.push({ id: 'create', isCreate: true, x: Math.cos(PLUS_ANGLE) * RADIUS, y: Math.sin(PLUS_ANGLE) * RADIUS, task: null });
       return positions;
     }
     
@@ -114,15 +128,15 @@ export default function RoundaboutMenu({
     const sweepArc = Math.PI;
     const positions = tasks.map((task, i) => {
       const angle = PLUS_ANGLE + (sweepDir * sweepArc * (i + 1) / (total - 1));
-      return { id: task.id, task, x: Math.cos(angle) * RADIUS, y: Math.sin(angle) * RADIUS };
+      return { id: task.id, task, x: Math.cos(angle) * RADIUS, y: Math.sin(angle) * RADIUS, isCreate: false };
     });
-    positions.push({ id: 'create', isCreate: true, x: Math.cos(PLUS_ANGLE) * RADIUS, y: Math.sin(PLUS_ANGLE) * RADIUS });
+    positions.push({ id: 'create', isCreate: true, x: Math.cos(PLUS_ANGLE) * RADIUS, y: Math.sin(PLUS_ANGLE) * RADIUS, task: null });
     
     return positions;
   }, [tasks, position.x]);
 
   // Sync external values to internal activeTask state
-  const checkSelection = (tx, ty) => {
+  const checkSelection = (tx: number, ty: number) => {
     'worklet';
     let closest = null;
     let minDist = 65;
@@ -212,7 +226,7 @@ export default function RoundaboutMenu({
             </View>
             
             {/* Bubbles */}
-            {bubblePositions.map((bp) => {
+            {bubblePositions.map((bp: any) => {
               const id = bp.isCreate ? 'create' : bp.task.id;
               const isActive = activeTask === id;
               const isSelected = selectedId === id;
@@ -252,15 +266,15 @@ export default function RoundaboutMenu({
   );
 }
 
-function Bubble({ bp, isActive, isSelected, isFadingOut, onTap }) {
+function Bubble({ bp, isActive, isSelected, isFadingOut, onTap }: any) {
   const scale = useSharedValue(1);
 
   // Dynamic Scaling
   useEffect(() => {
     if (isSelected) {
-      scale.value = withTiming(0, { duration: 150 });
+      scale.value = withTiming(0, { duration: 150 }) as any;
     } else {
-      scale.value = withSpring(isActive ? 1.4 : 1, { damping: 12, stiffness: 350 });
+      scale.value = withSpring(isActive ? 1.4 : 1, { damping: 12, stiffness: 350 }) as any;
     }
   }, [isActive, isSelected]);
 
@@ -275,7 +289,7 @@ function Bubble({ bp, isActive, isSelected, isFadingOut, onTap }) {
 
   const droplets = useMemo(() => {
     if (!isSelected) return [];
-    return WATER_DROP_DIRECTIONS.map((dir) => {
+    return WATER_DROP_DIRECTIONS.map((dir: any) => {
       const rx = dir.x + (Math.random() * 30 - 15);
       const ry = dir.y + (Math.random() * 30 - 15);
       const duration = 0.3 + Math.random() * 0.3;
@@ -307,15 +321,15 @@ function Bubble({ bp, isActive, isSelected, isFadingOut, onTap }) {
   );
 }
 
-function Droplet({ config, color, originX, originY }) {
+function Droplet({ config, color, originX, originY }: any) {
   const x = useSharedValue(originX + config.sx);
   const y = useSharedValue(originY + config.sy);
   const opacity = useSharedValue(1);
 
   useEffect(() => {
-    x.value = withTiming(originX + config.rx, { duration: config.duration * 1000, easing: Easing.out(Easing.quad) });
-    y.value = withTiming(originY + config.ry, { duration: config.duration * 1000, easing: Easing.in(Easing.quad) });
-    opacity.value = withDelay(config.duration * 600, withTiming(0, { duration: config.duration * 400 }));
+    x.value = withTiming(originX + config.rx, { duration: config.duration * 1000, easing: Easing.out(Easing.quad) }) as any;
+    y.value = withTiming(originY + config.ry, { duration: config.duration * 1000, easing: Easing.in(Easing.quad) }) as any;
+    opacity.value = withDelay(config.duration * 600, withTiming(0, { duration: config.duration * 400 })) as any;
   }, [config]);
 
   const dropStyle = useAnimatedStyle(() => ({

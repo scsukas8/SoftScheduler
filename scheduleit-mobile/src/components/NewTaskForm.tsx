@@ -5,7 +5,23 @@ import {
 } from 'react-native';
 import DateTimePicker from '@react-native-community/datetimepicker';
 
-export default function NewTaskForm({ visible, onClose, onSave, onDelete, task = null, initialDueDate = '' }) {
+interface NewTaskFormProps {
+  visible: boolean;
+  onClose: () => void;
+  onSave: (taskData: any) => void;
+  onDelete: (task: any) => void;
+  task?: any;
+  initialDueDate?: string;
+}
+
+export default function NewTaskForm({ 
+  visible, 
+  onClose, 
+  onSave, 
+  onDelete, 
+  task = null, 
+  initialDueDate = '' 
+}: NewTaskFormProps) {
   const [name, setName] = useState(task?.name || '');
   const [frequencyInterval, setFrequencyInterval] = useState(
     task ? (task.interval_days % 7 === 0 ? String(task.interval_days / 7) : String(task.interval_days)) : '1'

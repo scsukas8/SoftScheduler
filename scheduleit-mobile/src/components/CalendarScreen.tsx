@@ -35,15 +35,15 @@ export default function CalendarScreen({
   onEditTask: (task: any, dayId?: string) => void, 
   onScheduleTask: (taskId: string, dayId: string) => void 
 }) {
-  const [activeDay, setActiveDay] = useState(null); // { id, x, y }
-  const [committingTaskId, setCommittingTaskId] = useState(null);
+  const [activeDay, setActiveDay] = useState<{ id: string; x: number; y: number } | null>(null);
+  const [committingTaskId, setCommittingTaskId] = useState<string | null>(null);
   const lastEditTime = useRef(0);
   
   // Shared values for Hold-and-Swipe
   const gestureX = useSharedValue(0);
   const gestureY = useSharedValue(0);
   const touchStartTime = useSharedValue(0);
-  const activeTaskSV = useSharedValue(null); // Shared value for the hovered task
+  const activeTaskSV = useSharedValue<string | null>(null); // Shared value for the hovered task
 
   // 14 day view (7 columns, 2 rows) - Starting 3 days in the past
   const days = useMemo(() => {
@@ -86,7 +86,7 @@ export default function CalendarScreen({
         task.scheduled_date,
         task.wiggle_room,
         task.wiggle_type
-      );
+      ) as any;
       
       const startDayIdx = Math.max(0, 3 + windowStartDiff);
       const endDayIdx = Math.min(days.length - 1, 3 + windowEndDiff);
@@ -152,12 +152,12 @@ export default function CalendarScreen({
     return map;
   }, [tasks, days]);
 
-  const handleDaySelect = (dayId, x, y) => {
+  const handleDaySelect = (dayId: string, x: number, y: number) => {
     if (Date.now() - lastEditTime.current < 500) return; // Prevent Native RNGH from opening wheel during JS touch layer Edit task
     setActiveDay({ id: dayId, x, y });
   };
 
-  const handleCommit = (id) => {
+  const handleCommit = (id: string) => {
     if (!activeDay) return;
     if (id === 'create') {
       onEditTask && onEditTask(null, activeDay.id);

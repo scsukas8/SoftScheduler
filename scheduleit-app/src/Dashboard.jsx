@@ -200,15 +200,7 @@ function Dashboard({ user, view: initialView, isDark, setIsDark, handleLogout })
       <header className="app-header">
         <div className="header-left">
           <div className="app-logo" onClick={() => navigate('/')} style={{ cursor: 'pointer' }}>
-            <svg viewBox="0 0 24 24" width="28" height="28" fill="none" stroke="url(#logo-grad)" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-              <defs>
-                <linearGradient id="logo-grad" x1="0%" y1="0%" x2="100%" y2="100%">
-                  <stop offset="0%" stopColor="#ec4899" />
-                  <stop offset="100%" stopColor="#a855f7" />
-                </linearGradient>
-              </defs>
-              <path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/>
-            </svg>
+            <img src="/icon.png" alt="SoftSchedule Logo" style={{ width: '32px', height: '32px', marginRight: '10px' }} />
             <h1>SoftSchedule</h1>
           </div>
         </div>
