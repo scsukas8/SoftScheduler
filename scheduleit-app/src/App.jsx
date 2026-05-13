@@ -6,6 +6,7 @@ import { signInWithPopup, signOut, onAuthStateChanged, GoogleAuthProvider } from
 import Dashboard from './Dashboard';
 import LandingPage from './components/LandingPage';
 import LoginPage from './components/LoginPage';
+import PrivacyPolicy from './components/PrivacyPolicy';
 
 function App() {
   const [user, setUser] = useState(null);
@@ -58,6 +59,7 @@ function App() {
     <Router>
       <Routes>
         <Route path="/" element={<LandingPage user={user} isDark={isDark} setIsDark={setIsDark} />} />
+        <Route path="/privacy" element={<PrivacyPolicy />} />
         <Route path="/login" element={<LoginPage user={user} onLogin={handleLogin} />} />
         <Route 
           path="/tasks" 

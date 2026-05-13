@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Link } from 'react-router-dom';
 import './LandingPage.css';
 
 const LandingPage = ({ user, isDark, setIsDark }) => {
@@ -109,7 +109,7 @@ const LandingPage = ({ user, isDark, setIsDark }) => {
       </section>
 
       <footer className="landing-footer">
-        <p>&copy; {new Date().getFullYear()} SoftSchedule. All rights reserved.</p>
+        <p>&copy; {new Date().getFullYear()} SoftSchedule. All rights reserved. | <Link to="/privacy">Privacy Policy</Link></p>
       </footer>
     </div>
   );
