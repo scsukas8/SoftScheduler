@@ -24,11 +24,13 @@ const resolveColor = (color: string | undefined) => {
 
 export default function CalendarScreen({ 
   tasks = [], 
+  isDark,
   onCompleteTask, 
   onEditTask, 
   onScheduleTask 
 }: { 
   tasks: any[], 
+  isDark: boolean,
   onCompleteTask: (taskId: string, dayId: string) => void, 
   onEditTask: (task: any, dayId?: string) => void, 
   onScheduleTask: (taskId: string, dayId: string) => void 
@@ -42,8 +44,6 @@ export default function CalendarScreen({
   const gestureY = useSharedValue(0);
   const touchStartTime = useSharedValue(0);
   const activeTaskSV = useSharedValue(null); // Shared value for the hovered task
-  // Theme Context
-  const isDark = useColorScheme() === 'dark';
 
   // 14 day view (7 columns, 2 rows) - Starting 3 days in the past
   const days = useMemo(() => {
@@ -57,17 +57,30 @@ export default function CalendarScreen({
   }, []);
 
   const dayTasksMap = useMemo(() => {
-    const map = {};
-    days.forEach(d => map[d.toISOString()] = []);
+    const map: Record<string, any[]> = {};
+    const daySlots: Record<string, (string | null)[]> = {};
+    
+    days.forEach(d => {
+      const iso = d.toISOString();
+      map[iso] = [];
+      daySlots[iso] = [];
+    });
 
-    tasks.forEach(task => {
+    // 1. Sort tasks by duration or priority to fill slots more efficiently
+    const sortedInputTasks = [...tasks].sort((a, b) => {
+      const aInt = a.interval_days || 1;
+      const bInt = b.interval_days || 1;
+      return bInt - aInt; // Longer tasks first
+    });
+
+    sortedInputTasks.forEach(task => {
       const completedAt = (task.completed_at && typeof task.completed_at.toDate === 'function') 
         ? task.completed_at.toDate() 
         : new Date(task.completed_at || Date.now());
 
       if (isNaN(completedAt.getTime())) return;
 
-      const { windowStartDiff, windowEndDiff } = calculateTimeRemaining(
+      const { windowStartDiff, windowEndDiff, daysRemaining } = calculateTimeRemaining(
         completedAt, 
         task.interval_days, 
         task.scheduled_date,
@@ -75,28 +88,67 @@ export default function CalendarScreen({
         task.wiggle_type
       );
       
-      if (windowEndDiff < -3) return;
-
-      const startDayIdx = 3 + windowStartDiff;
-      const endDayIdx = 3 + windowEndDiff;
-      
+      const startDayIdx = Math.max(0, 3 + windowStartDiff);
+      const endDayIdx = Math.min(days.length - 1, 3 + windowEndDiff);
+      const targetDayIdx = 3 + daysRemaining;
       const completedDayStr = completedAt.toISOString().split('T')[0];
 
-      days.forEach((day, index) => {
+      if (windowEndDiff < -3 || windowStartDiff > 11) return;
+
+      // 2. Find first available vertical slot across the entire window
+      let slotIndex = 0;
+      let found = false;
+      while (!found) {
+        found = true;
+        for (let i = startDayIdx; i <= endDayIdx; i++) {
+          const dayIso = days[i].toISOString();
+          if (daySlots[dayIso][slotIndex]) {
+            found = false;
+            break;
+          }
+        }
+        if (!found) {
+          slotIndex++;
+          // Safety break to prevent infinite loop
+          if (slotIndex > 50) break;
+        }
+      }
+
+      // 3. Assign task to slots and map
+      for (let i = 0; i < days.length; i++) {
+        const day = days[i];
         const dStr = day.toISOString().split('T')[0];
-        
         const isHistorical = (dStr === completedDayStr);
-        const isActive = (index >= startDayIdx && index <= endDayIdx);
-        
+        const isActive = (i >= startDayIdx && i <= endDayIdx);
+
         if (isActive || isHistorical) {
-          map[day.toISOString()].push({ 
+          const dayIso = day.toISOString();
+          daySlots[dayIso][slotIndex] = task.id; // Mark slot as taken for both active and historical days
+
+          const distance = Math.abs(i - targetDayIdx);
+          let baseOpacity = 1;
+          if (isHistorical) baseOpacity = 0.35;
+          else if (isActive) baseOpacity = Math.max(0.2, 1 - (distance * 0.15));
+
+          map[dayIso].push({ 
             ...task, 
+            slotIndex,
             isHistorical: !isActive && isHistorical,
-            isOverdue: windowEndDiff < 0 && index === (3 + windowEndDiff)
+            isTarget: isActive && i === targetDayIdx,
+            isOverdue: windowEndDiff < 0 && i === (3 + windowEndDiff),
+            wiggleOpacity: baseOpacity,
+            isWindowStart: isActive && i === startDayIdx,
+            isWindowEnd: isActive && i === endDayIdx
           });
         }
-      });
+      }
     });
+
+    // 4. Sort each day's task list by slotIndex for rendering order
+    Object.keys(map).forEach(key => {
+      map[key].sort((a, b) => a.slotIndex - b.slotIndex);
+    });
+
     return map;
   }, [tasks, days]);
 
@@ -135,6 +187,7 @@ export default function CalendarScreen({
             const dayId = day.toISOString();
             const dayTasks = dayTasksMap[dayId] || [];
             const isToday = day.toDateString() === new Date().toDateString();
+            const isPast = day < new Date() && !isToday;
 
             // Unified Gesture for this cell
             const panGesture = Gesture.Pan()
@@ -188,36 +241,83 @@ export default function CalendarScreen({
                 <View style={[
                   styles.cell, 
                   isToday && styles.cellToday,
+                  isPast && { opacity: 0.5 },
                   { backgroundColor: isDark ? '#2A2A2A' : '#fff', borderColor: isDark ? '#333' : '#ddd' }
                 ]}>
                   <View style={styles.cellHeader}>
-                    <Text style={[styles.dayName, { color: isDark ? '#888' : '#777' }, isToday && styles.textToday]}>
+                    <Text style={[styles.dayName, { color: isDark ? '#aaa' : '#555' }, isToday && styles.textToday]}>
                       {day.toLocaleDateString('en-US', { weekday: 'short' })}
                     </Text>
-                    <Text style={[styles.dayNum, { color: isDark ? '#ccc' : '#333' }, isToday && styles.textToday]}>
+                    <Text style={[styles.dayNum, { color: isDark ? '#fff' : '#000' }, isToday && styles.textToday]}>
                       {day.getDate()}
                     </Text>
                   </View>
 
                   <View style={styles.taskIndicators}>
-                    {dayTasks.map(task => (
-                      <TouchableOpacity
-                        key={task.id + (task.isHistorical ? '-hist' : '')}
-                        style={[
-                          styles.taskLabel, 
-                          { backgroundColor: resolveColor(task.color), opacity: task.isHistorical ? 0.4 : 1 }
-                        ]}
-                        onPress={() => {
-                          lastEditTime.current = Date.now();
-                          setActiveDay(null);
-                          onEditTask && onEditTask(task);
-                        }}
-                      >
-                        <Text style={styles.taskLabelText} numberOfLines={1}>
-                          {task.isOverdue ? '! ' : ''}{task.name}
+                    {/* Render up to 3 slots, filling empty ones with spacers */}
+                    {[0, 1, 2].map(slotIdx => {
+                      const task = dayTasks.find(t => t.slotIndex === slotIdx);
+                      if (!task) return <View key={`spacer-${slotIdx}`} style={styles.taskWrapper} />;
+                      
+                      return (
+                        <View key={task.id + (task.isHistorical ? '-hist' : '')} style={styles.taskWrapper}>
+                          {/* Continuity Line */}
+                          {!task.isHistorical && (
+                            <View style={[
+                              styles.continuityLine, 
+                              { borderColor: resolveColor(task.color) },
+                              task.isWindowStart && { left: '50%' },
+                              task.isWindowEnd && { right: '50%' }
+                            ]} />
+                          )}
+                          
+                          <TouchableOpacity
+                            style={[
+                              styles.taskPill, 
+                              { 
+                                backgroundColor: (task.isTarget || task.isHistorical) 
+                                  ? resolveColor(task.color) 
+                                  : (day.toDateString() === new Date().toDateString() 
+                                      ? (isDark ? '#302b40' : '#fff')
+                                      : (isDark ? '#2A2A2A' : '#fff')),
+                                borderColor: resolveColor(task.color),
+                                borderWidth: (task.isTarget || task.isHistorical) ? 0 : 2,
+                                opacity: task.wiggleOpacity 
+                              }
+                            ]}
+                            onPress={() => {
+                              lastEditTime.current = Date.now();
+                              setActiveDay(null);
+                              onEditTask && onEditTask(task);
+                            }}
+                          >
+                            <Text 
+                              style={[
+                                styles.taskLabelText, 
+                                { 
+                                  color: (task.isTarget || task.isHistorical) 
+                                    ? '#000' 
+                                    : (isDark ? resolveColor(task.color) : '#333'), // Darker text for light mode hollow pills
+                                  fontWeight: (task.isTarget || task.isHistorical) ? '600' : 'bold' 
+                                }
+                              ]} 
+                              numberOfLines={1}
+                            >
+                              {task.isOverdue ? '! ' : ''}{task.name}
+                            </Text>
+                          </TouchableOpacity>
+                        </View>
+                      );
+                    })}
+
+                    {/* Overflow Indicator */}
+                    {dayTasks.length > 3 && (
+                      <View style={styles.moreIndicator}>
+                        <Text style={styles.moreText}>
+                          + {dayTasks.length - 3} more
                         </Text>
-                      </TouchableOpacity>
-                    ))}
+                      </View>
+                    )}
                   </View>
                 </View>
               </GestureDetector>
@@ -272,20 +372,20 @@ const styles = StyleSheet.create({
     backgroundColor: '#2A2A2A',
     borderRadius: 12,
     padding: 10,
-    marginBottom: 10,
     minHeight: 110,
-    borderWidth: 1,
+    borderWidth: 2, // Standardized to prevent content shifting
     borderColor: '#333'
   },
   cellToday: {
     borderColor: '#a48cff',
-    borderWidth: 2,
     backgroundColor: '#302b40'
   },
   cellHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    marginBottom: 8
+    marginBottom: 8,
+    height: 30, // Fixed height to ensure task rows align perfectly
+    alignItems: 'center'
   },
   dayName: {
     color: '#888',
@@ -303,17 +403,43 @@ const styles = StyleSheet.create({
   },
   taskIndicators: {
     flex: 1,
-    gap: 4
+    gap: 8
   },
-  taskLabel: {
+  taskWrapper: {
+    height: 28,
+    justifyContent: 'center',
+    position: 'relative'
+  },
+  continuityLine: {
+    position: 'absolute',
+    left: -16, // Bridge padding(10) + half-gap(5) + a tiny bit
+    right: -16,
+    height: 0,
+    borderTopWidth: 1.5,
+    borderStyle: 'dotted',
+    top: 14, // Exact middle of taskWrapper(28)
+    zIndex: 0
+  },
+  taskPill: {
     paddingVertical: 4,
-    paddingHorizontal: 6,
-    borderRadius: 4,
-    marginBottom: 4
+    paddingHorizontal: 8,
+    borderRadius: 20,
+    zIndex: 1,
+    alignItems: 'center',
+    justifyContent: 'center'
   },
   taskLabelText: {
     color: '#000',
-    fontSize: 12,
+    fontSize: 10, // Slightly smaller for alignment
     fontWeight: '600'
+  },
+  moreIndicator: {
+    alignItems: 'center',
+    marginTop: 2
+  },
+  moreText: {
+    fontSize: 10,
+    color: '#888',
+    fontWeight: 'bold'
   }
 });

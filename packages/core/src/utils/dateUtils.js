@@ -23,9 +23,14 @@ export function calculateTimeRemaining(completedAt, intervalDays, scheduledDate 
     targetDate.setDate(targetDate.getDate() + (intervalDays || 1));
   }
 
-  const now = new Date();
-  const diffTime = targetDate.getTime() - now.getTime();
-  const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+  const targetMidnight = new Date(targetDate);
+  targetMidnight.setHours(0, 0, 0, 0);
+
+  const nowMidnight = new Date();
+  nowMidnight.setHours(0, 0, 0, 0);
+
+  const diffTime = targetMidnight.getTime() - nowMidnight.getTime();
+  const diffDays = Math.round(diffTime / (1000 * 60 * 60 * 24));
   
   const wiggle = scheduledDate ? 0 : parseInt(wiggleRoom || 0, 10);
   const isSymmetric = wiggleType === 'symmetric';
@@ -36,6 +41,7 @@ export function calculateTimeRemaining(completedAt, intervalDays, scheduledDate 
   const hoursRemaining = Math.max(0, Math.floor(diffTime / (1000 * 60 * 60)));
   const hoursTotal = (intervalDays || 1) * 24;
   
+  const now = new Date();
   const passedMs = now.getTime() - completedDate.getTime();
   const passedDays = Math.floor(passedMs / (1000 * 60 * 60 * 24));
   const timePassedStr = passedDays === 0 ? 'Today' : `${passedDays}d ago`;

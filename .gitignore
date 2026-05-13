@@ -39,3 +39,6 @@ node_modules
 
 # APK Build files
 *.apk
+
+# Expo Build Metadata
+.expo

@@ -4,8 +4,9 @@ import { calculateTimeRemaining } from '@scheduleit/core';
 import Animated, { FadeInUp, SlideOutRight, LinearTransition } from 'react-native-reanimated';
 import TaskCard from './TaskCard';
 
-export default function ScheduleScreen({ tasks, onCompleteTask, onEditTask, onScheduleTask }: { 
+export default function ScheduleScreen({ tasks, isDark, onCompleteTask, onEditTask, onScheduleTask }: { 
   tasks: any[]; 
+  isDark: boolean;
   onCompleteTask: (id: string) => void;
   onEditTask: (task: any) => void;
   onScheduleTask: any; 
@@ -54,6 +55,7 @@ export default function ScheduleScreen({ tasks, onCompleteTask, onEditTask, onSc
       >
         <TaskCard 
           task={item} 
+          isDark={isDark}
           onComplete={() => onCompleteTask && onCompleteTask(item.id)}
           onEdit={() => onEditTask && onEditTask(item)}
           onSchedule={onScheduleTask}
@@ -62,7 +64,7 @@ export default function ScheduleScreen({ tasks, onCompleteTask, onEditTask, onSc
     );
   };
 
-  const isDark = useColorScheme() === 'dark';
+
 
   return (
     <View style={[styles.container, { backgroundColor: isDark ? '#1E1E1E' : '#f8f9fa' }]}>

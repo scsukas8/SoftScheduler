@@ -23,7 +23,7 @@
   border-radius: var(--radius-md);
   border: 1px solid var(--border-color);
   transition: all 0.2s ease;
-  overflow: hidden; /* Ensure content follows rounded corners */
+  /* Removed overflow: hidden to allow connecting bands to overlap cell gaps */
 }
 
 .calendar-cell.has-tasks .cell-hitbox {
@@ -71,26 +71,42 @@
 
 .task-indicators {
   display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-  justify-content: flex-end; /* push dots to bottom right */
+  flex-direction: column;
+  gap: 2px;
+  align-items: stretch; /* So they stretch boundary to boundary horizontally */
   margin-top: auto;
 }
 
 .task-label {
   font-size: 0.65rem;
   line-height: 1.1;
-  color: white; /* Ensure text is legible against custom colors */
+  color: white;
   padding: 2px 4px;
   border-radius: 4px;
-  margin-bottom: 2px;
+  box-sizing: border-box;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  max-width: 100%;
+  max-width: unset; /* Ensure it expands */
   font-weight: 500;
   box-shadow: 0 1px 2px rgba(0,0,0,0.1);
   transition: transform 0.2s;
+}
+
+/* Contiguous styling for not-window-start (connect to LEFT) */
+.task-label.not-window-start:not(.historical) {
+  border-top-left-radius: 0px;
+  border-bottom-left-radius: 0px;
+  margin-left: -12px; /* Pull backwards through cell padding */
+  padding-left: 12px; /* Restore text inset */
+}
+
+/* Contiguous styling for not-window-end (connect to RIGHT) */
+.task-label.not-window-end:not(.historical) {
+  border-top-right-radius: 0px;
+  border-bottom-right-radius: 0px;
+  margin-right: -20px; /* Pull forwards through padding + 8px gap */
+  z-index: 1; /* Help bridge the gap over parent borders */
 }
 
 .task-label.overdue {

@@ -1,5 +1,6 @@
 {
   "expo": {
+    "entryPoint": "./index.ts",
     "name": "SoftSchedule",
     "slug": "softschedule",
     "version": "1.0.0",

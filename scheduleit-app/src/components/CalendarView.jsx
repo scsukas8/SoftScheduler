@@ -328,7 +328,7 @@ export default function CalendarView({ tasks, onCompleteTask, onEditTask, onSche
 
       if (isNaN(completedAt.getTime())) return;
 
-      const { windowStartDiff, windowEndDiff } = calculateTimeRemaining(
+      const { windowStartDiff, windowEndDiff, daysRemaining } = calculateTimeRemaining(
         completedAt, 
         task.interval_days, 
         task.scheduled_date,
@@ -341,6 +341,7 @@ export default function CalendarView({ tasks, onCompleteTask, onEditTask, onSche
 
       const startDayIdx = 3 + windowStartDiff;
       const endDayIdx = 3 + windowEndDiff;
+      const targetDayIdx = 3 + daysRemaining;
       
       const completedDayStr = completedAt.toISOString().split('T')[0];
 
@@ -351,10 +352,23 @@ export default function CalendarView({ tasks, onCompleteTask, onEditTask, onSche
         const isActive = (index >= startDayIdx && index <= endDayIdx);
         
         if (isActive || isHistorical) {
+          const distance = Math.abs(index - targetDayIdx);
+          let baseOpacity = 1;
+
+          if (isHistorical) {
+            baseOpacity = 0.35;
+          } else if (isActive) {
+            // Drop opacity by 15% per day away from the exact target date, capping at a min of 20%
+            baseOpacity = Math.max(0.2, 1 - (distance * 0.15));
+          }
+
           map[day.toISOString()].push({ 
             ...task, 
             isHistorical: !isActive && isHistorical,
-            isOverdue: windowEndDiff < 0 && index === (3 + windowEndDiff)
+            isOverdue: windowEndDiff < 0 && index === (3 + windowEndDiff),
+            wiggleOpacity: baseOpacity,
+            isWindowStart: isActive && index === startDayIdx,
+            isWindowEnd: isActive && index === endDayIdx
           });
         }
       });
@@ -400,10 +414,10 @@ export default function CalendarView({ tasks, onCompleteTask, onEditTask, onSche
                   {dayTasks.map(task => (
                     <div 
                       key={task.id + (task.isHistorical ? '-hist' : '') + (task.isOverdue ? '-overdue' : '')} 
-                      className={`task-label ${task.isHistorical ? 'historical' : ''} ${task.isOverdue ? 'overdue' : ''}`} 
+                      className={`task-label ${task.isHistorical ? 'historical' : ''} ${task.isOverdue ? 'overdue' : ''} ${task.isWindowStart ? 'window-start' : 'not-window-start'} ${task.isWindowEnd ? 'window-end' : 'not-window-end'}`} 
                       style={{ 
                         backgroundColor: task.color,
-                        opacity: task.isHistorical ? 0.35 : 1,
+                        opacity: task.wiggleOpacity,
                         cursor: 'pointer'
                       }}
                       title={task.name + (task.isHistorical ? ' (Completed)' : '') + (task.isOverdue ? ' (OVERDUE)' : '')}

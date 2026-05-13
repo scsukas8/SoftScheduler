@@ -22,13 +22,18 @@ import CalendarScreen from './src/components/CalendarScreen';
 import NewTaskForm from './src/components/NewTaskForm';
 
 // Notification Services
-import { registerForPushNotificationsAsync, scheduleMorningBriefing } from './src/services/notificationService';
+import { registerForPushNotificationsAsync, scheduleAllNotifications, sendTestNotification, sendBriefingTest } from './src/services/notificationService';
 
 const Tab = createBottomTabNavigator();
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
 export default function App() {
   const [user, setUser] = useState<User | null>(null);
+  const [isDark, setIsDark] = useState(true);
+  const [briefingEnabled, setBriefingEnabled] = useState(true);
+  const [briefingHour, setBriefingHour] = useState(8);
+  const [briefingMinute, setBriefingMinute] = useState(0);
+  const [showTimePicker, setShowTimePicker] = useState(false);
   const [loading, setLoading] = useState(true);
   const [tasks, setTasks] = useState<any[]>([]);
   const [editingTask, setEditingTask] = useState<{ task: any; dayId?: string } | null>(null);
@@ -39,7 +44,6 @@ export default function App() {
 
   const [isSettingsVisible, setIsSettingsVisible] = useState(false);
   const colorScheme = useColorScheme();
-  const isDark = colorScheme === 'dark';
 
   useEffect(() => {
     try {
@@ -50,15 +54,24 @@ export default function App() {
       console.error("GoogleSignin.configure failed:", e);
     }
 
-    const loadTheme = async () => {
+    const loadSettings = async () => {
       try {
-        const savedTheme = await AsyncStorage.getItem('theme_pref');
-        if (savedTheme === 'dark' || savedTheme === 'light') {
-          Appearance.setColorScheme(savedTheme);
+        const savedTheme = await AsyncStorage.getItem('theme');
+        if (savedTheme) setIsDark(savedTheme === 'dark');
+        
+        const savedSettings = await AsyncStorage.getItem('notificationSettings');
+        if (savedSettings) {
+          const parsed = JSON.parse(savedSettings);
+          setBriefingEnabled(parsed.briefingEnabled ?? true);
+          setBriefingHour(parsed.briefingHour ?? 8);
+          setBriefingMinute(parsed.briefingMinute ?? 0);
         }
-      } catch (e) {}
+      } catch (e) {
+        console.error('Error loading settings', e);
+      }
     };
-    loadTheme();
+
+    loadSettings();
 
     const unsubscribeAuth = onAuthStateChanged(auth, (currentUser) => {
       setUser(currentUser);
@@ -73,11 +86,12 @@ export default function App() {
       setTasks([]);
       return;
     }
-    const unsubscribeTasks = subscribeTasks(user.uid, (taskList: any[]) => {
-      setTasks(taskList);
+    const unsubscribeTasks = subscribeTasks(user.uid, (newTasks: any[]) => {
+      setTasks(newTasks);
+      scheduleAllNotifications(newTasks, { briefingEnabled, briefingHour, briefingMinute });
     });
     return () => unsubscribeTasks();
-  }, [user]);
+  }, [user, briefingEnabled, briefingHour, briefingMinute]);
 
   // Notifications Integration
   useEffect(() => {
@@ -93,18 +107,7 @@ export default function App() {
     initNotifications();
   }, [user]);
 
-  useEffect(() => {
-    const updateBriefing = async () => {
-      if (user && tasks.length > 0) {
-        try {
-          await scheduleMorningBriefing(tasks);
-        } catch (e) {
-          console.error("Morning briefing schedule crash prevented:", e);
-        }
-      }
-    };
-    updateBriefing();
-  }, [tasks, user]);
+
 
   useEffect(() => {
     if (undoItem) {
@@ -121,6 +124,21 @@ export default function App() {
       }).start();
     }
   }, [undoItem]);
+
+  useEffect(() => {
+    const saveSettings = async () => {
+      try {
+        await AsyncStorage.setItem('notificationSettings', JSON.stringify({
+          briefingEnabled,
+          briefingHour,
+          briefingMinute
+        }));
+      } catch (e) {
+        console.error('Error saving settings', e);
+      }
+    };
+    if (user) saveSettings();
+  }, [briefingEnabled, briefingHour, briefingMinute, user]);
 
   const handleNativeGoogleSignIn = async () => {
     try {
@@ -267,9 +285,10 @@ export default function App() {
 
   const toggleTheme = async () => {
     const newTheme = isDark ? 'light' : 'dark';
+    setIsDark(!isDark);
     Appearance.setColorScheme(newTheme);
     try {
-      await AsyncStorage.setItem('theme_pref', newTheme);
+      await AsyncStorage.setItem('theme', newTheme);
     } catch (e) {}
   };
 
@@ -319,6 +338,7 @@ export default function App() {
               children={() => (
                 <ScheduleScreen 
                   tasks={tasks} 
+                  isDark={isDark}
                   onCompleteTask={handleCompleteTask}
                   onScheduleTask={handleScheduleTask}
                   onEditTask={(task: any) => setEditingTask({ task })}
@@ -330,6 +350,7 @@ export default function App() {
               children={() => (
                 <CalendarScreen 
                   tasks={tasks} 
+                  isDark={isDark}
                   onCompleteTask={handleCompleteTask}
                   onScheduleTask={handleScheduleTask}
                   onEditTask={(task: any, dayId?: string) => setEditingTask({ task, dayId })}
@@ -387,6 +408,53 @@ export default function App() {
                   thumbColor={isDark ? '#fff' : '#f4f3f4'}
                 />
               </View>
+
+              <View style={styles.settingsSection}>
+                <View style={styles.settingsRow}>
+                  <Text style={styles.settingsLabel}>Morning Briefing</Text>
+                  <Switch 
+                    value={briefingEnabled} 
+                    onValueChange={setBriefingEnabled}
+                    trackColor={{ false: "#767577", true: "#a48cff" }}
+                  />
+                </View>
+
+                {briefingEnabled && (
+                  <TouchableOpacity 
+                    style={styles.settingsRow} 
+                    onPress={() => setShowTimePicker(true)}
+                  >
+                    <Text style={styles.settingsLabel}>Briefing Time</Text>
+                    <Text style={styles.timeValue}>
+                      {briefingHour.toString().padStart(2, '0')}:{briefingMinute.toString().padStart(2, '0')}
+                    </Text>
+                  </TouchableOpacity>
+                )}
+
+                {showTimePicker && (
+                  <DateTimePicker
+                    value={new Date(new Date().setHours(briefingHour, briefingMinute))}
+                    mode="time"
+                    is24Hour={true}
+                    display="default"
+                    onChange={(event, date) => {
+                      setShowTimePicker(false);
+                      if (date) {
+                        setBriefingHour(date.getHours());
+                        setBriefingMinute(date.getMinutes());
+                      }
+                    }}
+                  />
+                )}
+              </View>
+
+              <TouchableOpacity style={styles.testBtn} onPress={sendTestNotification}>
+                <Text style={styles.testBtnText}>Send Basic Test</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity style={styles.testBtn} onPress={() => sendBriefingTest(tasks)}>
+                <Text style={styles.testBtnText}>Send Briefing Test</Text>
+              </TouchableOpacity>
 
               <TouchableOpacity style={styles.signOutBtn} onPress={handleSignOut}>
                 <Text style={styles.signOutText}>Sign Out</Text>
@@ -555,6 +623,44 @@ const styles = StyleSheet.create({
   },
   signOutText: {
     color: '#ff6b6b',
+    fontWeight: 'bold',
+    fontSize: 16,
+  },
+  settingsSection: {
+    backgroundColor: '#2A2A2A',
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 20,
+    width: '100%'
+  },
+  settingsRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#333'
+  },
+  settingsLabel: {
+    color: '#fff',
+    fontSize: 16
+  },
+  timeValue: {
+    color: '#a48cff',
+    fontSize: 16,
+    fontWeight: 'bold'
+  },
+  testBtn: {
+    backgroundColor: 'rgba(164, 140, 255, 0.1)',
+    padding: 16,
+    borderRadius: 12,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(164, 140, 255, 0.3)',
+    marginBottom: 16,
+  },
+  testBtnText: {
+    color: '#a48cff',
     fontWeight: 'bold',
     fontSize: 16,
   }

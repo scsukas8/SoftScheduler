@@ -32,14 +32,13 @@ const resolveColor = (color: string | undefined) => {
 
 interface TaskCardProps {
   task: any;
+  isDark: boolean;
   onComplete: (id: string) => void;
   onEdit: (task: any) => void;
   onSchedule: (id: string, date: string, mode?: 'lock' | 'reschedule') => void;
 }
 
-export default function TaskCard({ task, onComplete, onEdit, onSchedule }: TaskCardProps) {
-  const colorScheme = useColorScheme();
-  const isDark = colorScheme === 'dark';
+export default function TaskCard({ task, isDark, onComplete, onEdit, onSchedule }: TaskCardProps) {
   
   const interval = task.interval_days || 1;
   const wiggle = task.wiggle_room || 0;
@@ -131,7 +130,7 @@ export default function TaskCard({ task, onComplete, onEdit, onSchedule }: TaskC
             ]} numberOfLines={1}>{task.name}</Text>
             <Text style={[
               styles.subtitle, 
-              { color: isDark ? '#888' : '#666' },
+              { color: isDark ? '#bbb' : '#444' },
               isCritical && styles.italic
             ]}>
               {formattedTime}
