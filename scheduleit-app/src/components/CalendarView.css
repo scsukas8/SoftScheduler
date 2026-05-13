@@ -21,49 +21,48 @@
   flex-direction: column;
   background-color: var(--card-bg);
   border-radius: var(--radius-md);
-  border: 1px solid var(--border-color);
+  border: 2px solid var(--border-color); /* Standardized to 2px */
   transition: all 0.2s ease;
-  /* Removed overflow: hidden to allow connecting bands to overlap cell gaps */
-}
-
-.calendar-cell.has-tasks .cell-hitbox {
-  cursor: pointer;
 }
 
 .calendar-cell.today {
-  border-color: var(--accent-pink);
-  box-shadow: 0 0 10px rgba(255, 64, 129, 0.2);
-  background-color: rgba(168, 85, 247, 0.1); /* Slightly more purple for today */
+  border-color: var(--color-purple);
+  background-color: rgba(168, 85, 247, 0.05);
 }
 
 .calendar-cell.past {
   opacity: 0.5;
-  background-color: var(--card-bg); /* Darker/Greyed out */
-}
-
-.calendar-cell.has-tasks .cell-hitbox {
-  cursor: pointer;
 }
 
 .cell-hitbox {
-  padding: 12px;
+  padding: 10px;
   flex: 1;
   display: flex;
   flex-direction: column;
-  justify-content: space-between;
+  position: relative;
 }
 
 .cell-header {
   display: flex;
   justify-content: space-between;
-  align-items: flex-start;
-  color: var(--text-secondary);
-  font-size: 0.9rem;
-  font-weight: 500;
+  align-items: center;
+  margin-bottom: 8px;
+  height: 30px;
 }
 
-.day-name { text-transform: uppercase; font-size: 0.8rem; letter-spacing: 0.5px; }
-.day-num { font-size: 1.1rem; font-weight: 600; }
+.day-name { 
+  text-transform: uppercase; 
+  font-size: 0.75rem; 
+  letter-spacing: 0.5px; 
+  color: var(--text-secondary);
+  font-weight: bold;
+}
+
+.day-num { 
+  font-size: 1.1rem; 
+  font-weight: 700;
+  color: var(--text-primary);
+}
 
 .today .day-name, .today .day-num {
   color: var(--color-purple);
@@ -72,61 +71,76 @@
 .task-indicators {
   display: flex;
   flex-direction: column;
-  gap: 2px;
-  align-items: stretch; /* So they stretch boundary to boundary horizontally */
+  gap: 8px;
   margin-top: auto;
 }
 
-.task-label {
+.task-row {
+  height: 24px;
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.task-row.spacer {
+  visibility: hidden;
+}
+
+.continuity-line {
+  position: absolute;
+  top: 50%;
+  height: 0;
+  border-top: 1.5px dotted;
+  z-index: 0;
+}
+
+.task-pill {
+  width: 100%;
+  height: 100%;
+  border-radius: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   font-size: 0.65rem;
-  line-height: 1.1;
-  color: white;
-  padding: 2px 4px;
-  border-radius: 4px;
-  box-sizing: border-box;
+  font-weight: 700;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  max-width: unset; /* Ensure it expands */
-  font-weight: 500;
-  box-shadow: 0 1px 2px rgba(0,0,0,0.1);
-  transition: transform 0.2s;
+  padding: 0 8px;
+  z-index: 1;
+  cursor: pointer;
+  border: 2px solid transparent;
+  transition: transform 0.2s, box-shadow 0.2s;
 }
 
-/* Contiguous styling for not-window-start (connect to LEFT) */
-.task-label.not-window-start:not(.historical) {
-  border-top-left-radius: 0px;
-  border-bottom-left-radius: 0px;
-  margin-left: -12px; /* Pull backwards through cell padding */
-  padding-left: 12px; /* Restore text inset */
+.task-pill.hollow {
+  background-color: var(--card-bg) !important;
 }
 
-/* Contiguous styling for not-window-end (connect to RIGHT) */
-.task-label.not-window-end:not(.historical) {
-  border-top-right-radius: 0px;
-  border-bottom-right-radius: 0px;
-  margin-right: -20px; /* Pull forwards through padding + 8px gap */
-  z-index: 1; /* Help bridge the gap over parent borders */
+.dark .task-pill.hollow {
+  background-color: #2A2A2A !important;
 }
 
-.task-label.overdue {
-  outline: 2px solid rgba(0, 0, 0, 0.4);
-  outline-offset: -1px;
-  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.2);
-  z-index: 2; /* Put overdue tasks on top */
+.task-pill.solid {
+  color: #000 !important;
 }
 
-.dark .task-label.overdue {
-  outline: 2px solid rgba(255, 255, 255, 0.5);
-}
-
-.overdue-tag {
-  font-weight: 800;
-  margin-right: 2px;
-}
-
-.task-label:hover {
+.task-pill:hover {
   transform: scale(1.05);
+  box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+}
+
+.task-pill.overdue {
+  box-shadow: 0 0 8px rgba(255, 0, 0, 0.3);
+}
+
+.more-indicator {
+  text-align: center;
+  font-size: 0.65rem;
+  font-weight: 800;
+  color: var(--text-secondary);
+  margin-top: 4px;
 }
 
 .roundabout-header {
@@ -284,15 +298,20 @@
   .day-name { font-size: 0.65rem; }
   .day-num { font-size: 0.85rem; }
   
-  .task-label {
-    font-size: 0.55rem;
-    padding: 1px 3px;
-    margin-bottom: 1px;
-    border-radius: 1px;
-    display: block;
-    max-width: 100%;
-    overflow: hidden;
-    text-overflow: ellipsis;
+  .task-pill {
+    font-size: 0.5rem;
+    padding: 0 4px;
+    height: 18px;
+    border-radius: 10px;
+  }
+
+  .continuity-line {
+    display: none; /* Hide continuity lines on tiny mobile grid to avoid clutter */
+  }
+
+  .task-row {
+    height: 18px;
+    margin-bottom: 2px;
   }
 }
 

@@ -315,13 +315,25 @@ export default function CalendarView({ tasks, onCompleteTask, onEditTask, onSche
     });
   }, []);
 
-  // Pre-calculate which tasks fall on which days
+  // Pre-calculate which tasks fall on which days using a vertical slot system
   const dayTasksMap = useMemo(() => {
     const map = {};
-    days.forEach(d => map[d.toISOString()] = []);
+    const daySlots = {};
+    
+    days.forEach(d => {
+      const iso = d.toISOString();
+      map[iso] = [];
+      daySlots[iso] = [];
+    });
 
-    tasks.forEach(task => {
-      // Robust date extraction (handles Firestore Timestamps)
+    // 1. Sort tasks by duration (longer tasks first) to fill slots more efficiently
+    const sortedInputTasks = [...tasks].sort((a, b) => {
+      const aInt = a.interval_days || 1;
+      const bInt = b.interval_days || 1;
+      return bInt - aInt;
+    });
+
+    sortedInputTasks.forEach(task => {
       const completedAt = (task.completed_at && typeof task.completed_at.toDate === 'function') 
         ? task.completed_at.toDate() 
         : new Date(task.completed_at || Date.now());
@@ -336,43 +348,66 @@ export default function CalendarView({ tasks, onCompleteTask, onEditTask, onSche
         task.wiggle_type
       );
       
-      // If more than 3 days overdue, it disappears
-      if (windowEndDiff < -3) return;
-
-      const startDayIdx = 3 + windowStartDiff;
-      const endDayIdx = 3 + windowEndDiff;
+      const startDayIdx = Math.max(0, 3 + windowStartDiff);
+      const endDayIdx = Math.min(days.length - 1, 3 + windowEndDiff);
       const targetDayIdx = 3 + daysRemaining;
-      
       const completedDayStr = completedAt.toISOString().split('T')[0];
 
-      days.forEach((day, index) => {
-        const dStr = day.toISOString().split('T')[0];
-        
-        const isHistorical = (dStr === completedDayStr);
-        const isActive = (index >= startDayIdx && index <= endDayIdx);
-        
-        if (isActive || isHistorical) {
-          const distance = Math.abs(index - targetDayIdx);
-          let baseOpacity = 1;
+      if (windowEndDiff < -3 || windowStartDiff > 11) return;
 
-          if (isHistorical) {
-            baseOpacity = 0.35;
-          } else if (isActive) {
-            // Drop opacity by 15% per day away from the exact target date, capping at a min of 20%
-            baseOpacity = Math.max(0.2, 1 - (distance * 0.15));
+      // 2. Find first available vertical slot across the entire window
+      let slotIndex = 0;
+      let found = false;
+      while (!found) {
+        found = true;
+        for (let i = startDayIdx; i <= endDayIdx; i++) {
+          const dayIso = days[i].toISOString();
+          if (daySlots[dayIso][slotIndex]) {
+            found = false;
+            break;
           }
+        }
+        if (!found) {
+          slotIndex++;
+          if (slotIndex > 50) break;
+        }
+      }
 
-          map[day.toISOString()].push({ 
+      // 3. Assign task to slots and map
+      for (let i = 0; i < days.length; i++) {
+        const day = days[i];
+        const dStr = day.toISOString().split('T')[0];
+        const isHistorical = (dStr === completedDayStr);
+        const isActive = (i >= startDayIdx && i <= endDayIdx);
+
+        if (isActive || isHistorical) {
+          const dayIso = day.toISOString();
+          daySlots[dayIso][slotIndex] = task.id;
+
+          const distance = Math.abs(i - targetDayIdx);
+          let baseOpacity = 1;
+          if (isHistorical) baseOpacity = 0.35;
+          else if (isActive) baseOpacity = Math.max(0.2, 1 - (distance * 0.15));
+
+          map[dayIso].push({ 
             ...task, 
+            slotIndex,
             isHistorical: !isActive && isHistorical,
-            isOverdue: windowEndDiff < 0 && index === (3 + windowEndDiff),
+            isTarget: isActive && i === targetDayIdx,
+            isOverdue: windowEndDiff < 0 && i === (3 + windowEndDiff),
             wiggleOpacity: baseOpacity,
-            isWindowStart: isActive && index === startDayIdx,
-            isWindowEnd: isActive && index === endDayIdx
+            isWindowStart: isActive && i === startDayIdx,
+            isWindowEnd: isActive && i === endDayIdx
           });
         }
-      });
+      }
     });
+
+    // 4. Sort each day's task list by slotIndex for rendering order
+    Object.keys(map).forEach(key => {
+      map[key].sort((a, b) => a.slotIndex - b.slotIndex);
+    });
+
     return map;
   }, [tasks, days]);
 
@@ -411,25 +446,50 @@ export default function CalendarView({ tasks, onCompleteTask, onEditTask, onSche
                 
                 {/* Task Indicators */}
                 <div className="task-indicators">
-                  {dayTasks.map(task => (
-                    <div 
-                      key={task.id + (task.isHistorical ? '-hist' : '') + (task.isOverdue ? '-overdue' : '')} 
-                      className={`task-label ${task.isHistorical ? 'historical' : ''} ${task.isOverdue ? 'overdue' : ''} ${task.isWindowStart ? 'window-start' : 'not-window-start'} ${task.isWindowEnd ? 'window-end' : 'not-window-end'}`} 
-                      style={{ 
-                        backgroundColor: task.color,
-                        opacity: task.wiggleOpacity,
-                        cursor: 'pointer'
-                      }}
-                      title={task.name + (task.isHistorical ? ' (Completed)' : '') + (task.isOverdue ? ' (OVERDUE)' : '')}
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        onEditTask(task);
-                      }}
-                    >
-                      {task.isOverdue && <span className="overdue-tag">! </span>}
-                      {task.name.length > 20 ? task.name.substring(0, 18) + '...' : task.name}
+                  {[0, 1, 2].map(slotIdx => {
+                    const task = dayTasks.find(t => t.slotIndex === slotIdx);
+                    if (!task) return <div key={`spacer-${slotIdx}`} className="task-row spacer" />;
+                    
+                    const isSolid = task.isTarget || task.isHistorical;
+                    
+                    return (
+                      <div key={task.id + (task.isHistorical ? '-hist' : '')} className="task-row">
+                        {!task.isHistorical && (
+                          <div 
+                            className="continuity-line" 
+                            style={{ 
+                              borderColor: task.color,
+                              left: task.isWindowStart ? '50%' : '-15px',
+                              right: task.isWindowEnd ? '50%' : '-15px'
+                            }} 
+                          />
+                        )}
+                        <div 
+                          className={`task-pill ${isSolid ? 'solid' : 'hollow'} ${task.isHistorical ? 'historical' : ''} ${task.isOverdue ? 'overdue' : ''}`} 
+                          style={{ 
+                            backgroundColor: isSolid ? task.color : 'transparent',
+                            borderColor: task.color,
+                            opacity: task.wiggleOpacity,
+                            color: isSolid ? '#000' : task.color
+                          }}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            onEditTask(task);
+                          }}
+                        >
+                          {task.isOverdue && <span className="overdue-tag">! </span>}
+                          {task.name}
+                        </div>
+                      </div>
+                    );
+                  })}
+
+                  {/* Overflow Indicator */}
+                  {dayTasks.length > 3 && (
+                    <div className="more-indicator">
+                      + {dayTasks.length - 3} more
                     </div>
-                  ))}
+                  )}
                 </div>
               </div>
             </div>
