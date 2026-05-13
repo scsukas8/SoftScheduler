@@ -15,10 +15,10 @@
     },
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.sook.softschedule"
+      "bundleIdentifier": "com.symmetrystudio.softschedule"
     },
     "android": {
-      "package": "com.sook.softschedule",
+      "package": "com.symmetrystudio.softschedule",
       "versionCode": 1,
       "googleServicesFile": "./google-services.json",
       "adaptiveIcon": {
