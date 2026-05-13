@@ -65,6 +65,43 @@
           ]
         }
       }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:1073857724039:android:2fcd8b74844f138ab6c222",
+        "android_client_info": {
+          "package_name": "com.symmetrystudio.softschedule"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "1073857724039-pc6buad483taod2j4q1brqadodemmrsp.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.symmetrystudio.softschedule",
+            "certificate_hash": "5f4d7a0af38d6aed771fdce08a66a0dbb2fef5c9"
+          }
+        },
+        {
+          "client_id": "1073857724039-m5pmn570j6l7l4vokiaov83pj3c3t6qd.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyD7G_hBlH61YB0H3ggcUcdYofClfJhcucc"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "1073857724039-m5pmn570j6l7l4vokiaov83pj3c3t6qd.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
     }
   ],
   "configuration_version": "1"
