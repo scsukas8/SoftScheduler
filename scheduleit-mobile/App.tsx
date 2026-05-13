@@ -1,6 +1,10 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { StatusBar } from 'expo-status-bar';
-import { StyleSheet, Text, View, ActivityIndicator, TouchableOpacity, Platform, Animated as RNAnimated, Dimensions, Modal, Switch, useColorScheme, Appearance, Image } from 'react-native';
+import { 
+  StyleSheet, Text, View, ActivityIndicator, TouchableOpacity, 
+  Platform, Animated as RNAnimated, Dimensions, Modal, Switch, 
+  useColorScheme, Appearance, Image, ScrollView, Alert 
+} from 'react-native';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 import { NavigationContainer } from '@react-navigation/native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
@@ -20,6 +24,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import ScheduleScreen from './src/components/ScheduleView';
 import CalendarScreen from './src/components/CalendarScreen';
 import NewTaskForm from './src/components/NewTaskForm';
+import LoginScreen from './src/components/LoginScreen';
 import DateTimePicker from '@react-native-community/datetimepicker';
 const DateTimePickerAny = DateTimePicker as any;
 
@@ -275,14 +280,10 @@ export default function App() {
 
   if (!user) {
     return (
-      <View style={styles.loginContainer}>
-        <Text style={styles.title}>Soft Schedule</Text>
-        <Text style={styles.subtitle}>Fluid time management.</Text>
-        <TouchableOpacity style={styles.loginButton} onPress={handleNativeGoogleSignIn}>
-          <Text style={styles.loginText}>Continue with Google</Text>
-        </TouchableOpacity>
+      <>
+        <LoginScreen onLogin={handleNativeGoogleSignIn} />
         <StatusBar style="light" />
-      </View>
+      </>
     );
   }
 
@@ -302,6 +303,52 @@ export default function App() {
       setIsSettingsVisible(false);
     } catch (error) {
       console.error("Sign out error:", error);
+    }
+  };
+
+  const handleDeleteAccount = async () => {
+    if (!user) return;
+    try {
+      setLoading(true);
+      
+      // 1. Try to delete immediately
+      const taskPromises = tasks.map(t => deleteTask(user.uid, t.id));
+      await Promise.all(taskPromises);
+      await user.delete();
+      
+      await GoogleSignin.signOut();
+      setIsSettingsVisible(false);
+    } catch (e: any) {
+      console.error("Error deleting account:", e);
+      
+      // 2. If session is too old, re-authenticate and try again
+      if (e.code === 'auth/requires-recent-login') {
+        try {
+          alert("For security, please verify your identity to delete your account.");
+          
+          // Re-trigger Google Sign-In
+          await GoogleSignin.hasPlayServices();
+          const response: any = await GoogleSignin.signIn();
+          const idToken = response.data?.idToken || response.idToken;
+          
+          if (idToken) {
+            const googleCredential = GoogleAuthProvider.credential(idToken);
+            // Re-auth the current user
+            const { reauthenticateWithCredential } = await import('firebase/auth');
+            await reauthenticateWithCredential(user, googleCredential);
+            
+            // Try deletion again now that we're re-authed
+            await handleDeleteAccount(); 
+          }
+        } catch (reauthError) {
+          console.error("Re-auth failed:", reauthError);
+          alert("Verification failed. Please sign out and back in to delete your account.");
+        }
+      } else {
+        alert("Could not delete account. Please try again later.");
+      }
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -400,74 +447,110 @@ export default function App() {
         {/* Settings Modal */}
         <Modal visible={isSettingsVisible} animationType="slide" transparent={true} onRequestClose={() => setIsSettingsVisible(false)}>
           <View style={styles.modalOverlay}>
-            <View style={[styles.settingsContent, { backgroundColor: isDark ? '#2A2A2A' : '#fff' }]}>
+            <View style={[styles.settingsContent, { backgroundColor: isDark ? '#1A1A1A' : '#F9F9F9' }]}>
               <View style={styles.settingsHeader}>
-                <Text style={[styles.settingsTitle, { color: isDark ? '#fff' : '#000' }]}>Settings</Text>
-                <TouchableOpacity onPress={() => setIsSettingsVisible(false)}>
-                  <Ionicons name="close" size={28} color={isDark ? '#888' : '#555'} />
+                <Text style={[styles.settingsTitle, { color: isDark ? '#fff' : '#000' }]}>Account Center</Text>
+                <TouchableOpacity onPress={() => setIsSettingsVisible(false)} style={styles.closeSettingsBtn}>
+                  <Ionicons name="close" size={24} color={isDark ? '#888' : '#555'} />
                 </TouchableOpacity>
               </View>
 
-              <View style={styles.settingsRow}>
-                <Text style={[styles.settingsLabel, { color: isDark ? '#ccc' : '#333' }]}>Dark Mode</Text>
-                <Switch 
-                  value={isDark} 
-                  onValueChange={toggleTheme} 
-                  trackColor={{ false: '#767577', true: '#a48cff' }}
-                  thumbColor={isDark ? '#fff' : '#f4f3f4'}
-                />
-              </View>
-
-              <View style={styles.settingsSection}>
-                <View style={styles.settingsRow}>
-                  <Text style={styles.settingsLabel}>Morning Briefing</Text>
-                  <Switch 
-                    value={briefingEnabled} 
-                    onValueChange={setBriefingEnabled}
-                    trackColor={{ false: "#767577", true: "#a48cff" }}
+              <ScrollView showsVerticalScrollIndicator={false}>
+                {/* Profile Section */}
+                <View style={styles.profileCard}>
+                  <Image 
+                    source={{ uri: user?.photoURL || 'https://via.placeholder.com/100' }} 
+                    style={styles.profileImage} 
                   />
+                  <View style={styles.profileInfo}>
+                    <Text style={[styles.profileName, { color: isDark ? '#fff' : '#000' }]}>{user?.displayName || 'Symmetry User'}</Text>
+                    <Text style={styles.profileEmail}>{user?.email}</Text>
+                  </View>
                 </View>
 
-                {briefingEnabled && (
-                  <TouchableOpacity 
-                    style={styles.settingsActionRow} 
-                    onPress={() => setShowTimePicker(true)}
-                  >
-                    <Text style={styles.settingsActionLabel}>Briefing Time</Text>
-                    <Text style={styles.timeValue}>
-                      {briefingHour.toString().padStart(2, '0')}:{briefingMinute.toString().padStart(2, '0')}
-                    </Text>
+                <Text style={styles.settingsSectionTitle}>Preferences</Text>
+                
+                <View style={styles.settingsBox}>
+                  <View style={styles.settingsRow}>
+                    <View style={styles.settingsLabelGroup}>
+                      <Ionicons name="moon-outline" size={20} color="#a48cff" />
+                      <Text style={[styles.settingsLabel, { color: isDark ? '#ccc' : '#333' }]}>Dark Mode</Text>
+                    </View>
+                    <Switch 
+                      value={isDark} 
+                      onValueChange={toggleTheme} 
+                      trackColor={{ false: '#767577', true: '#a48cff' }}
+                    />
+                  </View>
+
+                  <View style={[styles.divider, { backgroundColor: isDark ? '#333' : '#eee' }]} />
+
+                  <View style={styles.settingsRow}>
+                    <View style={styles.settingsLabelGroup}>
+                      <Ionicons name="notifications-outline" size={20} color="#a48cff" />
+                      <Text style={[styles.settingsLabel, { color: isDark ? '#ccc' : '#333' }]}>Morning Briefing</Text>
+                    </View>
+                    <Switch 
+                      value={briefingEnabled} 
+                      onValueChange={setBriefingEnabled}
+                      trackColor={{ false: "#767577", true: "#a48cff" }}
+                    />
+                  </View>
+
+                  {briefingEnabled && (
+                    <TouchableOpacity 
+                      style={styles.settingsActionRow} 
+                      onPress={() => setShowTimePicker(true)}
+                    >
+                      <Text style={styles.settingsActionLabel}>Briefing Time</Text>
+                      <View style={styles.timeBadge}>
+                        <Text style={styles.timeValue}>
+                          {briefingHour.toString().padStart(2, '0')}:{briefingMinute.toString().padStart(2, '0')}
+                        </Text>
+                      </View>
+                    </TouchableOpacity>
+                  )}
+                </View>
+
+                <View style={styles.settingsBox}>
+                  <TouchableOpacity style={styles.settingsRow} onPress={handleSignOut}>
+                    <View style={styles.settingsLabelGroup}>
+                      <Ionicons name="log-out-outline" size={20} color="#a48cff" />
+                      <Text style={[styles.settingsLabel, { color: isDark ? '#ccc' : '#333' }]}>Sign Out</Text>
+                    </View>
                   </TouchableOpacity>
-                )}
+                </View>
 
-                {showTimePicker && (
-                  <DateTimePickerAny
-                    value={new Date(new Date().setHours(briefingHour, briefingMinute))}
-                    mode="time"
-                    is24Hour={true}
-                    display="default"
-                    onChange={(event: any, date?: Date) => {
-                      setShowTimePicker(false);
-                      if (date) {
-                        setBriefingHour(date.getHours());
-                        setBriefingMinute(date.getMinutes());
+                <Text style={styles.settingsSectionTitle}>Danger Zone</Text>
+                <View style={[styles.settingsBox, { borderColor: 'rgba(255, 107, 107, 0.2)', borderWidth: 1 }]}>
+                  <TouchableOpacity style={styles.settingsRow} onPress={() => {
+                    if (Platform.OS === 'web') {
+                      if (confirm("Delete your account? This will wipe all your tasks forever. For security, you may need to sign in one last time.")) {
+                        handleDeleteAccount();
                       }
-                    }}
-                  />
-                )}
-              </View>
+                    } else {
+                      Alert.alert(
+                        "Delete Account Forever?",
+                        "This will permanently remove all of your tasks and data. For security, you'll be asked to sign in one last time to verify your identity.",
+                        [
+                          { text: "Cancel", style: "cancel" },
+                          { text: "Delete Forever", style: "destructive", onPress: handleDeleteAccount }
+                        ]
+                      );
+                    }
+                  }}>
+                    <View style={styles.settingsLabelGroup}>
+                      <Ionicons name="trash-outline" size={20} color="#ff6b6b" />
+                      <Text style={[styles.settingsLabel, { color: '#ff6b6b' }]}>Delete Account</Text>
+                    </View>
+                  </TouchableOpacity>
+                </View>
 
-              <TouchableOpacity style={styles.testBtn} onPress={sendTestNotification}>
-                <Text style={styles.testBtnText}>Send Basic Test</Text>
-              </TouchableOpacity>
-
-              <TouchableOpacity style={styles.testBtn} onPress={() => sendBriefingTest(tasks)}>
-                <Text style={styles.testBtnText}>Send Briefing Test</Text>
-              </TouchableOpacity>
-
-              <TouchableOpacity style={styles.signOutBtn} onPress={handleSignOut}>
-                <Text style={styles.signOutText}>Sign Out</Text>
-              </TouchableOpacity>
+                <View style={styles.settingsFooter}>
+                  <Text style={styles.footerBrand}>SoftSchedule by Symmetry Studio</Text>
+                  <Text style={styles.footerVersion}>Version 1.0.0 (Production)</Text>
+                </View>
+              </ScrollView>
             </View>
           </View>
         </Modal>
@@ -594,83 +677,128 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   settingsContent: {
-    width: '80%',
-    borderRadius: 20,
+    width: '90%',
+    maxHeight: '80%',
+    borderRadius: 30,
     padding: 24,
-    elevation: 5,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.25,
-    shadowRadius: 4,
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.3,
+    shadowRadius: 20,
+    elevation: 10,
   },
   settingsHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 24,
+    marginBottom: 20,
   },
   settingsTitle: {
-    fontSize: 24,
-    fontWeight: 'bold',
+    fontSize: 22,
+    fontWeight: '800',
+    letterSpacing: -0.5,
+  },
+  closeSettingsBtn: {
+    padding: 4,
+  },
+  profileCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(164, 140, 255, 0.1)',
+    padding: 16,
+    borderRadius: 20,
+    marginBottom: 24,
+    borderWidth: 1,
+    borderColor: 'rgba(164, 140, 255, 0.2)',
+  },
+  profileImage: {
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    marginRight: 16,
+  },
+  profileInfo: {
+    flex: 1,
+  },
+  profileName: {
+    fontSize: 18,
+    fontWeight: '700',
+  },
+  profileEmail: {
+    fontSize: 14,
+    color: '#888',
+    marginTop: 2,
+  },
+  settingsSectionTitle: {
+    color: '#666',
+    fontSize: 12,
+    fontWeight: '800',
+    textTransform: 'uppercase',
+    letterSpacing: 1,
+    marginBottom: 12,
+    marginLeft: 4,
+  },
+  settingsBox: {
+    backgroundColor: 'rgba(164, 140, 255, 0.05)',
+    borderRadius: 20,
+    padding: 8,
+    marginBottom: 24,
   },
   settingsRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 24,
+    padding: 12,
+  },
+  settingsLabelGroup: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
   },
   settingsLabel: {
-    fontSize: 18,
-  },
-  signOutBtn: {
-    backgroundColor: 'rgba(255, 60, 60, 0.1)',
-    padding: 16,
-    borderRadius: 12,
-    alignItems: 'center',
-    borderWidth: 1,
-    borderColor: 'rgba(255, 60, 60, 0.3)',
-  },
-  signOutText: {
-    color: '#ff6b6b',
-    fontWeight: 'bold',
     fontSize: 16,
+    fontWeight: '600',
   },
-  settingsSection: {
-    backgroundColor: '#2A2A2A',
-    borderRadius: 12,
-    padding: 16,
-    marginBottom: 20,
-    width: '100%'
+  divider: {
+    height: 1,
+    marginHorizontal: 12,
   },
   settingsActionRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingVertical: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: '#333'
+    padding: 12,
+    marginTop: -4,
   },
   settingsActionLabel: {
-    color: '#fff',
-    fontSize: 16
+    color: '#888',
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  timeBadge: {
+    backgroundColor: 'rgba(164, 140, 255, 0.15)',
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 8,
   },
   timeValue: {
     color: '#a48cff',
-    fontSize: 16,
-    fontWeight: 'bold'
+    fontWeight: '700',
+    fontSize: 14,
   },
-  testBtn: {
-    backgroundColor: 'rgba(164, 140, 255, 0.1)',
-    padding: 16,
-    borderRadius: 12,
+  settingsFooter: {
     alignItems: 'center',
-    borderWidth: 1,
-    borderColor: 'rgba(164, 140, 255, 0.3)',
-    marginBottom: 16,
+    marginTop: 10,
+    paddingBottom: 20,
   },
-  testBtnText: {
-    color: '#a48cff',
-    fontWeight: 'bold',
-    fontSize: 16,
+  footerBrand: {
+    color: '#666',
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  footerVersion: {
+    color: '#444',
+    fontSize: 10,
+    marginTop: 4,
   }
 });

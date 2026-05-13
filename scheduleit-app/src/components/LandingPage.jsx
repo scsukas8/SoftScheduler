@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
+import { TOUR_SLIDES, MARKETING_COPY } from '@scheduleit/core';
 import './LandingPage.css';
 
 const LandingPage = ({ user, isDark, setIsDark }) => {
@@ -20,7 +21,7 @@ const LandingPage = ({ user, isDark, setIsDark }) => {
         <div className="nav-container">
           <div className="nav-logo">
             <img src="/icon.png" alt="SoftSchedule Logo" style={{ width: '32px', height: '32px', marginRight: '10px' }} />
-            <span>SoftSchedule</span>
+            <span>{MARKETING_COPY.hero.title}</span>
           </div>
           <div className="nav-actions">
             <button className="nav-theme-toggle" onClick={() => setIsDark(!isDark)} title="Toggle theme">
@@ -44,8 +45,8 @@ const LandingPage = ({ user, isDark, setIsDark }) => {
           <div className="hero-logo-large">
             <img src="/icon.png" alt="SoftSchedule Logo Large" style={{ width: '120px', height: '120px' }} />
           </div>
-          <h1>SoftSchedule</h1>
-          <p className="hero-subtitle">Soft scheduling for a calmer, more productive life.</p>
+          <h1>{MARKETING_COPY.hero.title}</h1>
+          <p className="hero-subtitle">{MARKETING_COPY.hero.subtitle}</p>
           
           <div className="get-started-box">
             <h3>Get Started</h3>
@@ -75,41 +76,51 @@ const LandingPage = ({ user, isDark, setIsDark }) => {
 
       <section className="info-section">
         <div className="info-container">
-          <div className="info-card animate-on-scroll">
-            <div className="info-text">
-              <h2>Flexible Wiggle Room</h2>
-              <p>Life doesn't always happen on a fixed schedule. SoftSchedule gives you "wiggle room" for your tasks, so you can breathe easier when things shift.</p>
-            </div>
-            <div className="info-visual calendar-visual">
-              {/* Decorative CSS Visual */}
-              <div className="mock-calendar">
-                <div className="mock-day"></div>
-                <div className="mock-day active">
-                  <div className="mock-bubble"></div>
-                </div>
-                <div className="mock-day"></div>
+          {TOUR_SLIDES.map((slide, index) => (
+            <div key={slide.id} className={`info-card ${index % 2 !== 0 ? 'reverse' : ''} animate-on-scroll`}>
+              <div className="info-text">
+                <span className="feature-tag" style={{ background: slide.tagBg, color: slide.tagColor }}>
+                  {slide.tag}
+                </span>
+                <h2>{slide.title}</h2>
+                <p>{slide.description}</p>
+              </div>
+              <div className="info-visual">
+                {slide.id === 1 && (
+                  <div className="mock-clock">
+                    <div className="clock-hand"></div>
+                    <div className="clock-ripple"></div>
+                  </div>
+                )}
+                {slide.id === 2 && (
+                  <div className="mock-calendar">
+                    <div className="mock-day"></div>
+                    <div className="mock-day active">
+                      <div className="mock-bubble"></div>
+                    </div>
+                    <div className="mock-day"></div>
+                  </div>
+                )}
+                {slide.id === 3 && (
+                  <div className="mock-list">
+                    <div className="mock-item overdue"></div>
+                    <div className="mock-item due"></div>
+                    <div className="mock-item soon"></div>
+                  </div>
+                )}
               </div>
             </div>
-          </div>
-
-          <div className="info-card reverse animate-on-scroll">
-            <div className="info-text">
-              <h2>Urgency at a Glance</h2>
-              <p>Our intelligent sorting system puts overdue and imminent tasks at the top, while keeping future goals softly on the horizon.</p>
-            </div>
-            <div className="info-visual list-visual">
-               <div className="mock-list">
-                <div className="mock-item overdue"></div>
-                <div className="mock-item due"></div>
-                <div className="mock-item soon"></div>
-              </div>
-            </div>
-          </div>
+          ))}
         </div>
       </section>
 
       <footer className="landing-footer">
-        <p>&copy; {new Date().getFullYear()} SoftSchedule. All rights reserved. | <Link to="/privacy">Privacy Policy</Link></p>
+        <div className="footer-content">
+          <p className="footer-branding">{MARKETING_COPY.footer.branding} &copy; {new Date().getFullYear()}</p>
+          <div className="footer-links">
+             <Link to="/privacy">Privacy Policy</Link>
+          </div>
+        </div>
       </footer>
     </div>
   );

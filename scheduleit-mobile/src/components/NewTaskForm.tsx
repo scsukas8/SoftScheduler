@@ -4,6 +4,7 @@ import {
   StyleSheet, ScrollView, Modal, KeyboardAvoidingView, Platform 
 } from 'react-native';
 import DateTimePicker from '@react-native-community/datetimepicker';
+import { Ionicons } from '@expo/vector-icons';
 
 interface NewTaskFormProps {
   visible: boolean;
@@ -22,14 +23,27 @@ export default function NewTaskForm({
   task = null, 
   initialDueDate = '' 
 }: NewTaskFormProps) {
+  const [inputMode, setInputMode] = useState<'center' | 'range'>(
+    task?.wiggle_type === 'range' ? 'range' : 'center'
+  );
   const [name, setName] = useState(task?.name || '');
-  const [frequencyInterval, setFrequencyInterval] = useState(
-    task ? (task.interval_days % 7 === 0 ? String(task.interval_days / 7) : String(task.interval_days)) : '1'
+  
+  // Center Mode States
+  const [targetInterval, setTargetInterval] = useState(
+    task ? String(task.interval_days) : '7'
   );
-  const [frequencyUnit, setFrequencyUnit] = useState(
-    task ? (task.interval_days % 7 === 0 ? 'weeks' : 'days') : 'days'
+  const [wiggleRoom, setWiggleRoom] = useState(
+    task?.wiggle_room !== undefined ? String(task.wiggle_room) : '2'
   );
-  const [wiggleRoom, setWiggleRoom] = useState(task?.wiggle_room !== undefined ? String(task.wiggle_room) : '0');
+  
+  // Range Mode States
+  const [rangeMin, setRangeMin] = useState(
+    task ? String(task.interval_days - (task.wiggle_room || 0)) : '5'
+  );
+  const [rangeMax, setRangeMax] = useState(
+    task ? String(task.interval_days + (task.wiggle_room || 0)) : '9'
+  );
+
   const [wiggleType, setWiggleType] = useState(task?.wiggle_type || 'symmetric');
   const [color, setColor] = useState(task?.color || '#a48cff');
   const [error, setError] = useState('');
@@ -44,7 +58,6 @@ export default function NewTaskForm({
       return new Date(completedAt.getTime() + task.interval_days * 24 * 60 * 60 * 1000);
     }
     if (initialDueDate) {
-       // Handle both YYYY-MM-DD and full ISO strings
        const datePart = initialDueDate.split('T')[0];
        const [y, m, d] = datePart.split('-').map(Number);
        if (!isNaN(y)) return new Date(y, m - 1, d);
@@ -69,6 +82,27 @@ export default function NewTaskForm({
     setDate(currentDate);
   };
 
+  // Keep modes in sync
+  const handleCenterChange = (target: string, wiggle: string) => {
+    setTargetInterval(target);
+    setWiggleRoom(wiggle);
+    const t = parseInt(target, 10) || 0;
+    const w = parseInt(wiggle, 10) || 0;
+    setRangeMin(String(t - w));
+    setRangeMax(String(t + w));
+  };
+
+  const handleRangeChange = (min: string, max: string) => {
+    setRangeMin(min);
+    setRangeMax(max);
+    const mi = parseInt(min, 10) || 0;
+    const ma = parseInt(max, 10) || 0;
+    const center = Math.floor((mi + ma) / 2);
+    const wiggle = Math.ceil((ma - mi) / 2);
+    setTargetInterval(String(center));
+    setWiggleRoom(String(wiggle));
+  };
+
   const handleSave = () => {
     setError('');
     if (!name) {
@@ -76,9 +110,7 @@ export default function NewTaskForm({
       return;
     }
 
-    let intervalDays = parseInt(frequencyInterval, 10) || 1;
-    if (frequencyUnit === 'weeks') intervalDays *= 7;
-
+    const intervalDays = parseInt(targetInterval, 10) || 1;
     const wiggle = parseInt(wiggleRoom, 10) || 0;
     const completedAt = new Date(date.getTime() - intervalDays * 24 * 60 * 60 * 1000);
 
@@ -87,7 +119,7 @@ export default function NewTaskForm({
       name,
       interval_days: intervalDays,
       wiggle_room: wiggle,
-      wiggle_type: wiggleType,
+      wiggle_type: inputMode === 'range' ? 'range' : wiggleType,
       completed_at: completedAt.toISOString(),
       color
     });
@@ -100,7 +132,8 @@ export default function NewTaskForm({
     textContentType: 'none',
     importantForAutofill: 'no',
     spellCheck: false,
-    placeholderTextColor: '#666'
+    placeholderTextColor: '#666',
+    keyboardType: 'numeric'
   };
 
   return (
@@ -113,7 +146,7 @@ export default function NewTaskForm({
           <View style={styles.header}>
             <Text style={styles.headerText}>{task ? 'Edit Task' : 'New Task'}</Text>
             <TouchableOpacity onPress={onClose} style={styles.closeBtn}>
-              <Text style={styles.closeBtnText}>X</Text>
+              <Text style={styles.closeBtnText}>✕</Text>
             </TouchableOpacity>
           </View>
 
@@ -124,76 +157,119 @@ export default function NewTaskForm({
               <Text style={styles.label}>Name:</Text>
               <TextInput 
                 {...commonInputProps}
+                keyboardType="default"
                 style={styles.input}
                 value={name}
                 onChangeText={setName}
-                placeholder="e.g. Wash sheets"
+                placeholder="e.g. Change bed sheets"
                 maxLength={100}
               />
             </View>
-
             <View style={styles.inputGroup}>
-              <Text style={styles.label}>Frequency (Every):</Text>
-              <View style={styles.row}>
-                <TextInput 
-                  {...commonInputProps}
-                  style={[styles.input, styles.numberInput]}
-                  value={frequencyInterval}
-                  onChangeText={setFrequencyInterval}
-                  keyboardType="numeric"
-                />
-                <View style={styles.toggleGroup}>
+              <View style={styles.labelRow}>
+                <Text style={styles.label}>Frequency:</Text>
+                <View style={styles.miniToggle}>
                   <TouchableOpacity 
-                    style={[styles.toggleBtn, frequencyUnit === 'days' && styles.toggleActive]}
-                    onPress={() => setFrequencyUnit('days')}
+                    onPress={() => setInputMode('center')}
+                    style={[styles.miniBtn, inputMode === 'center' && styles.miniActive]}
                   >
-                    <Text style={styles.toggleText}>Days</Text>
+                    <Text style={[styles.miniText, inputMode === 'center' && styles.miniTextActive]}>~ Approx</Text>
                   </TouchableOpacity>
                   <TouchableOpacity 
-                    style={[styles.toggleBtn, frequencyUnit === 'weeks' && styles.toggleActive]}
-                    onPress={() => setFrequencyUnit('weeks')}
+                    onPress={() => setInputMode('range')}
+                    style={[styles.miniBtn, inputMode === 'range' && styles.miniActive]}
                   >
-                    <Text style={styles.toggleText}>Weeks</Text>
+                    <Text style={[styles.miniText, inputMode === 'range' && styles.miniTextActive]}>Range</Text>
                   </TouchableOpacity>
                 </View>
               </View>
-            </View>
 
-            <View style={styles.inputGroup}>
-              <Text style={styles.label}>Wiggle Room:</Text>
-              <View style={styles.row}>
-                <TextInput 
-                  {...commonInputProps}
-                  style={[styles.input, styles.numberInput]}
-                  value={wiggleRoom}
-                  onChangeText={setWiggleRoom}
-                  keyboardType="numeric"
-                />
-                <View style={styles.toggleGroup}>
-                  <TouchableOpacity 
-                    style={[styles.toggleBtn, wiggleType === 'symmetric' && styles.toggleActive]}
-                    onPress={() => setWiggleType('symmetric')}
-                  >
-                    <Text style={styles.toggleText}>±</Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity 
-                    style={[styles.toggleBtn, wiggleType === 'late-only' && styles.toggleActive]}
-                    onPress={() => setWiggleType('late-only')}
-                  >
-                    <Text style={styles.toggleText}>+ Only</Text>
-                  </TouchableOpacity>
+              {inputMode === 'center' ? (
+                <View style={styles.sentenceContainer}>
+                  <Text style={styles.sentenceText}>Do this every</Text>
+                  <View style={styles.inlineInputContainer}>
+                    <TextInput 
+                      {...commonInputProps}
+                      style={styles.inlineInput}
+                      value={targetInterval}
+                      onChangeText={(v) => handleCenterChange(v, wiggleRoom)}
+                      selectTextOnFocus
+                    />
+                  </View>
+                  <Text style={styles.sentenceText}>days ±</Text>
+                  <View style={styles.inlineInputContainer}>
+                    <TextInput 
+                      {...commonInputProps}
+                      style={styles.inlineInput}
+                      value={wiggleRoom}
+                      onChangeText={(v) => handleCenterChange(targetInterval, v)}
+                      selectTextOnFocus
+                    />
+                  </View>
+                  <Text style={styles.sentenceText}>days.</Text>
                 </View>
-              </View>
+              ) : (
+                <View style={styles.sentenceContainer}>
+                  <Text style={styles.sentenceText}>Do this every</Text>
+                  <View style={styles.inlineInputContainer}>
+                    <TextInput 
+                      {...commonInputProps}
+                      style={styles.inlineInput}
+                      value={rangeMin}
+                      onChangeText={(v) => handleRangeChange(v, rangeMax)}
+                      selectTextOnFocus
+                    />
+                  </View>
+                  <Text style={styles.sentenceText}>to</Text>
+                  <View style={styles.inlineInputContainer}>
+                    <TextInput 
+                      {...commonInputProps}
+                      style={styles.inlineInput}
+                      value={rangeMax}
+                      onChangeText={(v) => handleRangeChange(rangeMin, v)}
+                      selectTextOnFocus
+                    />
+                  </View>
+                  <Text style={styles.sentenceText}>days.</Text>
+                </View>
+              )}
             </View>
 
             <View style={styles.inputGroup}>
-              <Text style={styles.label}>Next Due Date:</Text>
-              <TouchableOpacity 
-                style={styles.input} 
-                onPress={() => setShowDatePicker(true)}
-              >
-                <Text style={{ color: '#fff', fontSize: 16 }}>{date.toLocaleDateString()}</Text>
-              </TouchableOpacity>
+              <Text style={styles.label}>Next date:</Text>
+              <View style={styles.dateRow}>
+                {inputMode === 'center' ? (
+                  <View style={styles.dateContainer}>
+                    <TouchableOpacity 
+                      style={[styles.datePickerBtn, {flex: 1}]} 
+                      onPress={() => setShowDatePicker(true)}
+                    >
+                      <Ionicons name="calendar-outline" size={20} color="#a48cff" style={{marginRight: 8}} />
+                      <Text style={styles.dateText}>{date.toLocaleDateString()}</Text>
+                    </TouchableOpacity>
+                    <View style={styles.wiggleBadge}>
+                      <Text style={styles.wiggleBadgeText}>± {wiggleRoom || 0}d</Text>
+                    </View>
+                  </View>
+                ) : (
+                  <View style={styles.dateRangeContainer}>
+                    <TouchableOpacity 
+                      style={[styles.datePickerBtn, {flex: 1}]} 
+                      onPress={() => setShowDatePicker(true)}
+                    >
+                      <Ionicons name="calendar-outline" size={18} color="#a48cff" style={{marginRight: 6}} />
+                      <Text style={styles.dateText}>{date.toLocaleDateString()}</Text>
+                    </TouchableOpacity>
+                    <Text style={styles.rangeDivider}>to</Text>
+                    <View style={[styles.datePickerBtn, styles.disabledDate, {flex: 1}]}>
+                      <Ionicons name="calendar-outline" size={18} color="rgba(164, 140, 255, 0.4)" style={{marginRight: 6}} />
+                      <Text style={styles.dateText}>
+                        {new Date(date.getTime() + (parseInt(rangeMax, 10) - parseInt(rangeMin, 10)) * 24 * 60 * 60 * 1000).toLocaleDateString()}
+                      </Text>
+                    </View>
+                  </View>
+                )}
+              </View>
               
               {showDatePicker && (
                 <DateTimePicker
@@ -288,6 +364,40 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     textTransform: 'uppercase',
   },
+  labelRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 10,
+  },
+  subLabel: {
+    color: '#666',
+    fontSize: 12,
+    marginBottom: 6,
+    fontWeight: '600'
+  },
+  miniToggle: {
+    flexDirection: 'row',
+    backgroundColor: '#262626',
+    borderRadius: 8,
+    padding: 2,
+  },
+  miniBtn: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 6,
+  },
+  miniActive: {
+    backgroundColor: '#404040',
+  },
+  miniText: {
+    color: '#666',
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  miniTextActive: {
+    color: '#fff',
+  },
   input: {
     backgroundColor: '#262626',
     color: '#fff',
@@ -296,6 +406,97 @@ const styles = StyleSheet.create({
     fontSize: 16,
     borderWidth: 1,
     borderColor: '#333'
+  },
+  dateRow: {
+    marginTop: 4,
+  },
+  dateContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  dateRangeContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  datePickerBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#262626',
+    padding: 16,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#333',
+  },
+  disabledDate: {
+    opacity: 0.6,
+    backgroundColor: '#1a1a1a',
+  },
+  dateText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '500',
+  },
+  rangeDivider: {
+    color: '#666',
+    fontSize: 14,
+    fontWeight: '700',
+  },
+  wiggleBadge: {
+    backgroundColor: 'rgba(164, 140, 255, 0.1)',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: 'rgba(164, 140, 255, 0.3)',
+  },
+  wiggleBadgeText: {
+    color: '#a48cff',
+    fontSize: 14,
+    fontWeight: '700',
+  },
+  inputWithUnit: {
+    position: 'relative',
+    justifyContent: 'center',
+  },
+  unitText: {
+    position: 'absolute',
+    right: 16,
+    color: '#666',
+    fontSize: 14,
+    fontWeight: '700',
+  },
+  sentenceContainer: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    alignItems: 'center',
+    backgroundColor: '#262626',
+    paddingVertical: 16,
+    paddingHorizontal: 12,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: '#333',
+    minHeight: 80,
+  },
+  sentenceText: {
+    color: '#ccc',
+    fontSize: 16,
+    lineHeight: 24,
+  },
+  inlineInputContainer: {
+    borderBottomWidth: 2,
+    borderBottomColor: '#a48cff',
+    marginHorizontal: 8,
+    minWidth: 40,
+    alignItems: 'center',
+  },
+  inlineInput: {
+    color: '#fff',
+    fontSize: 20,
+    fontWeight: '800',
+    textAlign: 'center',
+    paddingVertical: 2,
   },
   row: {
     flexDirection: 'row',
