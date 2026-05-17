@@ -1,9 +1,9 @@
 import React, { useMemo, useState, useRef } from 'react';
-import { View, Text, StyleSheet, Dimensions, ScrollView, TouchableOpacity, useColorScheme } from 'react-native';
+import { View, Text, StyleSheet, Dimensions, ScrollView, TouchableOpacity, useColorScheme, Modal, TextInput, Pressable, Vibration } from 'react-native';
 import { calculateTimeRemaining } from '@scheduleit/core';
-import RoundaboutMenu from './RoundaboutMenu';
 import { GestureDetector, Gesture, State } from 'react-native-gesture-handler';
-import Animated, { useSharedValue, runOnJS } from 'react-native-reanimated';
+import Animated, { useSharedValue, runOnJS, useAnimatedRef, measure, useAnimatedStyle, withSpring, withTiming } from 'react-native-reanimated';
+import { Ionicons } from '@expo/vector-icons';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
@@ -22,28 +22,66 @@ const resolveColor = (color: string | undefined) => {
   return COLOR_MAP[color] || color;
 };
 
+const DayHoverHighlight = ({ dayId, hoveredDaySV }: { dayId: string, hoveredDaySV: Animated.SharedValue<string | null> }) => {
+  const style = useAnimatedStyle(() => {
+    const isHovered = hoveredDaySV.value === dayId;
+    return {
+      opacity: withTiming(isHovered ? 1 : 0, { duration: 150 }),
+    };
+  });
+  
+  return <Animated.View style={[StyleSheet.absoluteFill, styles.cellHoverHighlight, style]} pointerEvents="none" />;
+};
+
 export default function CalendarScreen({ 
   tasks = [], 
   isDark,
   onCompleteTask, 
   onEditTask, 
-  onScheduleTask 
+  onScheduleTask,
+  onPuntTask
 }: { 
   tasks: any[], 
   isDark: boolean,
   onCompleteTask: (taskId: string, dayId: string) => void, 
   onEditTask: (task: any, dayId?: string) => void, 
-  onScheduleTask: (taskId: string, dayId: string) => void 
+  onScheduleTask: (taskId: string, dayId: string, mode?: 'lock' | 'reschedule') => void,
+  onPuntTask: (taskId: string, days: number) => void
 }) {
-  const [activeDay, setActiveDay] = useState<{ id: string; x: number; y: number } | null>(null);
-  const [committingTaskId, setCommittingTaskId] = useState<string | null>(null);
-  const lastEditTime = useRef(0);
-  
-  // Shared values for Hold-and-Swipe
-  const gestureX = useSharedValue(0);
-  const gestureY = useSharedValue(0);
-  const touchStartTime = useSharedValue(0);
-  const activeTaskSV = useSharedValue<string | null>(null); // Shared value for the hovered task
+  // Quick Action States
+  const [selectedTask, setSelectedTask] = useState<any>(null);
+  const [isQuickActionsVisible, setIsQuickActionsVisible] = useState(false);
+  const [isPuntDialogVisible, setIsPuntDialogVisible] = useState(false);
+  const [puntDays, setPuntDays] = useState('1');
+
+  // Bulletproof Drag and Drop
+  const [draggedTask, setDraggedTask] = useState<any>(null);
+  const dragX = useSharedValue(0);
+  const dragY = useSharedValue(0);
+  const isDragging = useSharedValue(false);
+  const hoveredDaySV = useSharedValue<string | null>(null);
+
+  const ghostStyle = useAnimatedStyle(() => ({
+    position: 'absolute',
+    left: 0,
+    top: 0,
+    width: 100,
+    height: 28,
+    transform: [
+      { translateX: dragX.value - 50 },
+      { translateY: dragY.value - 60 }, // Offset upwards so it's not hidden by the thumb
+      { scale: withSpring(isDragging.value ? 1.5 : 1) }
+    ],
+    opacity: withTiming(isDragging.value ? 0.9 : 0),
+    zIndex: 9999,
+  }));
+
+  // 14 static refs for synchronous layout measuring
+  const containerRef = useAnimatedRef<View>();
+  const cellRefs = [
+    useAnimatedRef<View>(), useAnimatedRef<View>(), useAnimatedRef<View>(), useAnimatedRef<View>(), useAnimatedRef<View>(), useAnimatedRef<View>(), useAnimatedRef<View>(),
+    useAnimatedRef<View>(), useAnimatedRef<View>(), useAnimatedRef<View>(), useAnimatedRef<View>(), useAnimatedRef<View>(), useAnimatedRef<View>(), useAnimatedRef<View>()
+  ];
 
   // 14 day view (7 columns, 2 rows) - Starting 3 days in the past
   const days = useMemo(() => {
@@ -152,36 +190,94 @@ export default function CalendarScreen({
     return map;
   }, [tasks, days]);
 
-  const handleDaySelect = (dayId: string, x: number, y: number) => {
-    if (Date.now() - lastEditTime.current < 500) return; // Prevent Native RNGH from opening wheel during JS touch layer Edit task
-    setActiveDay({ id: dayId, x, y });
-  };
-
-  const handleCommit = (id: string) => {
-    if (!activeDay) return;
-    if (id === 'create') {
-      onEditTask && onEditTask(null, activeDay.id);
+  const dayIdsSV = useSharedValue(days.map(d => d.toISOString()));
+  const handleDragDrop = (taskId: string, startDayId: string, endDayId: string, isLocked: boolean) => {
+    if (isLocked) {
+      onScheduleTask(taskId, endDayId, 'lock');
     } else {
-      const isFuture = new Date(activeDay.id) > new Date();
-      if (isFuture) {
-        onScheduleTask && onScheduleTask(id, activeDay.id);
-      } else {
-        onCompleteTask && onCompleteTask(id, activeDay.id);
+      const startDate = new Date(startDayId);
+      const endDate = new Date(endDayId);
+      startDate.setHours(0, 0, 0, 0);
+      endDate.setHours(0, 0, 0, 0);
+      
+      const diffTime = endDate.getTime() - startDate.getTime();
+      const diffDays = Math.round(diffTime / (1000 * 60 * 60 * 24));
+      
+      if (diffDays !== 0) {
+        onPuntTask(taskId, diffDays);
       }
     }
-    setCommittingTaskId(id);
-    setTimeout(() => {
-      setActiveDay(null);
-      setCommittingTaskId(null);
-      activeTaskSV.value = null; // Clear shared hover state to prevent cross-day ghost commits
-    }, 450);
+  };
+
+  const createDragGesture = (task: any, dayId: string) => {
+    const taskSummary = { id: task.id, name: task.name, color: task.color, isLocked: !!task.scheduled_date };
+    
+    return Gesture.Pan()
+      .activateAfterLongPress(300)
+      .onStart((e) => {
+        runOnJS(setDraggedTask)(taskSummary);
+        isDragging.value = true;
+        const c = measure(containerRef);
+        dragX.value = e.absoluteX - (c?.pageX || 0);
+        dragY.value = e.absoluteY - (c?.pageY || 0);
+        runOnJS(Vibration.vibrate)(15);
+      })
+      .onUpdate((e) => {
+        const c = measure(containerRef);
+        dragX.value = e.absoluteX - (c?.pageX || 0);
+        dragY.value = e.absoluteY - (c?.pageY || 0);
+        
+        let foundIdx = -1;
+        // Unrolled for maximum worklet safety and performance
+        const x = e.absoluteX; const y = e.absoluteY;
+        const check = (i: number, ref: any) => {
+          'worklet';
+          const m = measure(ref);
+          if (m && x >= m.pageX && x <= m.pageX + m.width && y >= m.pageY && y <= m.pageY + m.height) return true;
+          return false;
+        };
+        
+        if (check(0, cellRefs[0])) foundIdx = 0;
+        else if (check(1, cellRefs[1])) foundIdx = 1;
+        else if (check(2, cellRefs[2])) foundIdx = 2;
+        else if (check(3, cellRefs[3])) foundIdx = 3;
+        else if (check(4, cellRefs[4])) foundIdx = 4;
+        else if (check(5, cellRefs[5])) foundIdx = 5;
+        else if (check(6, cellRefs[6])) foundIdx = 6;
+        else if (check(7, cellRefs[7])) foundIdx = 7;
+        else if (check(8, cellRefs[8])) foundIdx = 8;
+        else if (check(9, cellRefs[9])) foundIdx = 9;
+        else if (check(10, cellRefs[10])) foundIdx = 10;
+        else if (check(11, cellRefs[11])) foundIdx = 11;
+        else if (check(12, cellRefs[12])) foundIdx = 12;
+        else if (check(13, cellRefs[13])) foundIdx = 13;
+
+        if (foundIdx !== -1) {
+          hoveredDaySV.value = dayIdsSV.value[foundIdx];
+        } else {
+          hoveredDaySV.value = null;
+        }
+      })
+      .onEnd((e) => {
+        if (hoveredDaySV.value) {
+          runOnJS(handleDragDrop)(taskSummary.id, dayId, hoveredDaySV.value, taskSummary.isLocked);
+          runOnJS(Vibration.vibrate)(10);
+        }
+        isDragging.value = false;
+        hoveredDaySV.value = null;
+        runOnJS(setDraggedTask)(null);
+      });
   };
 
   return (
-    <View style={[styles.container, { backgroundColor: isDark ? '#1E1E1E' : '#f8f9fa' }]}>
+    <View ref={containerRef} style={[styles.container, { backgroundColor: isDark ? '#1E1E1E' : '#f8f9fa' }]}>
       <Text style={[styles.header, { color: isDark ? '#fff' : '#222' }]}>Upcoming 14 Days</Text>
       
-      <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
+      <ScrollView 
+        contentContainerStyle={styles.scrollContent} 
+        showsVerticalScrollIndicator={false}
+        scrollEnabled={!draggedTask} // Lock scroll while dragging!
+      >
         <View style={styles.grid}>
           {days.map((day, index) => {
             const dayId = day.toISOString();
@@ -189,56 +285,10 @@ export default function CalendarScreen({
             const isToday = day.toDateString() === new Date().toDateString();
             const isPast = day < new Date() && !isToday;
 
-            // Unified Gesture for this cell
-            const panGesture = Gesture.Pan()
-              .onBegin((e) => {
-                gestureX.value = 0;
-                gestureY.value = 0;
-                touchStartTime.value = Date.now();
-                // Instantly spawn menu upon firm touch (0ms delay)
-                runOnJS(handleDaySelect)(dayId, e.absoluteX, e.absoluteY);
-              })
-              .onUpdate((e) => {
-                gestureX.value = e.translationX;
-                gestureY.value = e.translationY;
-              })
-              .onEnd((e) => {
-                const distance = Math.sqrt(e.translationX ** 2 + e.translationY ** 2);
-                const elapsed = Date.now() - touchStartTime.value;
-                
-                // If they actively dragged
-                if (distance > 10) {
-                  if (activeTaskSV.value) {
-                    runOnJS(handleCommit)(activeTaskSV.value);
-                  } else {
-                    // Swiped but missed a bubble, abort and close
-                    runOnJS(setActiveDay)(null);
-                    activeTaskSV.value = null; 
-                  }
-                } else {
-                  // If distance <= 10
-                  // If elapsed < 500ms, it's a fast tap! Leave menu open.
-                  // If elapsed >= 500ms, it's an aborted long press! Close it!
-                  if (elapsed >= 500) {
-                    runOnJS(setActiveDay)(null);
-                    activeTaskSV.value = null;
-                  }
-                }
-              })
-              .onFinalize((e) => {
-                // Only auto-close if the gesture was officially CANCELLED (e.g., by the ScrollView scroll)
-                // We do NOT close on FAILED (a tap) because we want the menu to stay open for taps.
-                if (e.state === State.CANCELLED) {
-                  runOnJS(setActiveDay)(null);
-                  activeTaskSV.value = null;
-                }
-              });
-
-            const composed = panGesture;
-
             return (
-              <GestureDetector key={dayId} gesture={composed}>
-                <View style={[
+              <Pressable key={dayId} onPress={() => onEditTask(null, dayId)}>
+                <View 
+                  ref={cellRefs[index]} style={[
                   styles.cell, 
                   isToday && styles.cellToday,
                   isPast && { opacity: 0.5 },
@@ -271,41 +321,42 @@ export default function CalendarScreen({
                             ]} />
                           )}
                           
-                          <TouchableOpacity
-                            style={[
-                              styles.taskPill, 
-                              { 
-                                backgroundColor: (task.isTarget || task.isHistorical) 
-                                  ? resolveColor(task.color) 
-                                  : (day.toDateString() === new Date().toDateString() 
-                                      ? (isDark ? '#302b40' : '#fff')
-                                      : (isDark ? '#2A2A2A' : '#fff')),
-                                borderColor: resolveColor(task.color),
-                                borderWidth: (task.isTarget || task.isHistorical) ? 0 : 2,
-                                opacity: task.wiggleOpacity 
-                              }
-                            ]}
-                            onPress={() => {
-                              lastEditTime.current = Date.now();
-                              setActiveDay(null);
-                              onEditTask && onEditTask(task);
-                            }}
-                          >
-                            <Text 
+                          <GestureDetector gesture={createDragGesture(task, dayId)}>
+                            <TouchableOpacity
                               style={[
-                                styles.taskLabelText, 
+                                styles.taskPill, 
                                 { 
-                                  color: (task.isTarget || task.isHistorical) 
-                                    ? '#000' 
-                                    : (isDark ? resolveColor(task.color) : '#333'), // Darker text for light mode hollow pills
-                                  fontWeight: (task.isTarget || task.isHistorical) ? '600' : 'bold' 
+                                  backgroundColor: (task.isTarget || task.isHistorical) 
+                                    ? resolveColor(task.color) 
+                                    : (day.toDateString() === new Date().toDateString() 
+                                        ? (isDark ? '#302b40' : '#fff')
+                                        : (isDark ? '#2A2A2A' : '#fff')),
+                                  borderColor: resolveColor(task.color),
+                                  borderWidth: (task.isTarget || task.isHistorical) ? 0 : 2,
+                                  opacity: (draggedTask?.id === task.id) ? 0.3 : task.wiggleOpacity 
                                 }
-                              ]} 
-                              numberOfLines={1}
+                              ]}
+                              onPress={() => {
+                                setSelectedTask({ ...task, dayId });
+                                setIsQuickActionsVisible(true);
+                              }}
                             >
-                              {task.isOverdue ? '! ' : ''}{task.name}
-                            </Text>
-                          </TouchableOpacity>
+                              <Text 
+                                style={[
+                                  styles.taskLabelText, 
+                                  { 
+                                    color: (task.isTarget || task.isHistorical) 
+                                      ? '#000' 
+                                      : (isDark ? resolveColor(task.color) : '#333'), // Darker text for light mode hollow pills
+                                    fontWeight: (task.isTarget || task.isHistorical) ? '600' : 'bold' 
+                                  }
+                                ]} 
+                                numberOfLines={1}
+                              >
+                                {task.isOverdue ? '! ' : ''}{task.name}
+                              </Text>
+                            </TouchableOpacity>
+                          </GestureDetector>
                         </View>
                       );
                     })}
@@ -320,26 +371,81 @@ export default function CalendarScreen({
                     )}
                   </View>
                 </View>
-              </GestureDetector>
+              </Pressable>
             );
           })}
         </View>
       </ScrollView>
 
-      {activeDay && (
-        <RoundaboutMenu 
-          tasks={(dayTasksMap[activeDay.id] || []).filter(t => !t.isHistorical)} 
-          position={activeDay}
-          externalTranslateX={gestureX}
-          externalTranslateY={gestureY}
-          hoveredTaskSV={activeTaskSV} // Pass the SV to be written to
-          externalCommittingId={committingTaskId}
-          onClose={() => setActiveDay(null)}
-          onComplete={(taskId) => onCompleteTask && onCompleteTask(taskId, activeDay.id)}
-          onSchedule={onScheduleTask}
-          onAddTask={() => onEditTask && onEditTask(null, activeDay.id)}
-        />
-      )}
+      {/* Quick Actions Modal */}
+      <Modal visible={isQuickActionsVisible} transparent animationType="fade" onRequestClose={() => setIsQuickActionsVisible(false)}>
+        <Pressable style={styles.modalOverlay} onPress={() => setIsQuickActionsVisible(false)}>
+          <View style={[styles.quickActionsContent, { backgroundColor: isDark ? '#2A2A2A' : '#fff' }]}>
+            <Text style={[styles.quickTaskName, { color: isDark ? '#fff' : '#000' }]}>{selectedTask?.name}</Text>
+            
+            <View style={styles.quickActionsRow}>
+              <TouchableOpacity style={styles.quickActionBtn} onPress={() => { onCompleteTask(selectedTask.id, selectedTask.dayId); setIsQuickActionsVisible(false); }}>
+                <View style={[styles.quickActionIcon, { backgroundColor: 'rgba(52, 211, 153, 0.1)' }]}><Ionicons name="checkmark-circle-outline" size={28} color="#34d399" /></View>
+                <Text style={[styles.quickActionLabel, { color: isDark ? '#ccc' : '#333' }]}>Complete</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity style={styles.quickActionBtn} onPress={() => { setIsQuickActionsVisible(false); setIsPuntDialogVisible(true); }}>
+                <View style={[styles.quickActionIcon, { backgroundColor: 'rgba(164, 140, 255, 0.1)' }]}><Ionicons name="arrow-forward-outline" size={28} color="#a48cff" /></View>
+                <Text style={[styles.quickActionLabel, { color: isDark ? '#ccc' : '#333' }]}>Punt</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity style={styles.quickActionBtn} onPress={() => { setIsQuickActionsVisible(false); onEditTask(selectedTask); }}>
+                <View style={[styles.quickActionIcon, { backgroundColor: 'rgba(100, 100, 100, 0.1)' }]}><Ionicons name="create-outline" size={28} color={isDark ? '#aaa' : '#666'} /></View>
+                <Text style={[styles.quickActionLabel, { color: isDark ? '#ccc' : '#333' }]}>Full Edit</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </Pressable>
+      </Modal>
+
+      {/* Punt Dialog */}
+      <Modal visible={isPuntDialogVisible} transparent animationType="fade" onRequestClose={() => setIsPuntDialogVisible(false)}>
+        <View style={styles.modalOverlay}>
+          <View style={[styles.puntDialogContent, { backgroundColor: isDark ? '#2A2A2A' : '#fff' }]}>
+            <Text style={[styles.modalTitle, { color: isDark ? '#fff' : '#000' }]}>Punt "{selectedTask?.name}"</Text>
+            <Text style={[styles.modalSub, { color: isDark ? '#aaa' : '#666' }]}>How many days would you like to push this forward?</Text>
+            
+            <View style={styles.puntInputContainer}>
+              <TextInput style={[styles.puntInput, { color: isDark ? '#fff' : '#000', borderColor: isDark ? '#444' : '#ddd' }]} value={puntDays} onChangeText={setPuntDays} keyboardType="number-pad" autoFocus selectTextOnFocus />
+              <Text style={[styles.puntSuffix, { color: isDark ? '#aaa' : '#666' }]}>days</Text>
+            </View>
+
+            <Text style={styles.puntHint}>*you can also drag it in the calendar</Text>
+
+            <View style={styles.modalButtons}>
+              <TouchableOpacity style={styles.cancelBtn} onPress={() => setIsPuntDialogVisible(false)}>
+                <Text style={[styles.cancelBtnText, { color: isDark ? '#aaa' : '#666' }]}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.confirmBtn} onPress={() => { onPuntTask(selectedTask.id, parseInt(puntDays) || 1); setIsPuntDialogVisible(false); }}>
+                <Text style={styles.confirmBtnText}>Push Forward</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Ghost Task */}
+      <Animated.View style={ghostStyle} pointerEvents="none">
+        <View style={[
+          styles.taskPill, 
+          { 
+            backgroundColor: resolveColor(draggedTask?.color), 
+            opacity: 1, 
+            borderWidth: 0,
+            width: 100, 
+          }
+        ]}>
+          <Text style={[styles.taskLabelText, { color: '#000', fontWeight: '800' }]} numberOfLines={1}>
+            {draggedTask?.name}
+          </Text>
+        </View>
+      </Animated.View>
+
     </View>
   );
 }
@@ -441,5 +547,112 @@ const styles = StyleSheet.create({
     fontSize: 10,
     color: '#888',
     fontWeight: 'bold'
-  }
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  quickActionsContent: {
+    width: '80%',
+    padding: 24,
+    borderRadius: 24,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.2,
+    shadowRadius: 20,
+    elevation: 10,
+  },
+  quickTaskName: {
+    fontSize: 20,
+    fontWeight: '800',
+    marginBottom: 20,
+    textAlign: 'center',
+  },
+  quickActionsRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+    alignItems: 'center',
+  },
+  quickActionBtn: {
+    alignItems: 'center',
+    gap: 8,
+  },
+  quickActionIcon: {
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  quickActionLabel: {
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  puntDialogContent: {
+    width: '85%',
+    padding: 24,
+    borderRadius: 24,
+  },
+  modalTitle: {
+    fontSize: 20,
+    fontWeight: '800',
+    marginBottom: 8,
+  },
+  modalSub: {
+    fontSize: 14,
+    marginBottom: 24,
+    lineHeight: 20,
+  },
+  puntInputContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 12,
+    marginBottom: 16,
+  },
+  puntInput: {
+    fontSize: 32,
+    fontWeight: '800',
+    borderBottomWidth: 2,
+    width: 60,
+    textAlign: 'center',
+    paddingBottom: 4,
+  },
+  puntSuffix: {
+    fontSize: 18,
+    fontWeight: '600',
+  },
+  puntHint: {
+    fontSize: 12,
+    color: '#888',
+    fontStyle: 'italic',
+    textAlign: 'center',
+    marginBottom: 24,
+  },
+  modalButtons: {
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+    gap: 16,
+  },
+  cancelBtn: {
+    paddingVertical: 12,
+    paddingHorizontal: 20,
+  },
+  cancelBtnText: {
+    fontSize: 16,
+    fontWeight: '700',
+  },
+  confirmBtn: {
+    backgroundColor: '#a48cff',
+    paddingVertical: 12,
+    paddingHorizontal: 24,
+    borderRadius: 14,
+  },
+  confirmBtnText: {
+    color: '#000',
+    fontSize: 16,
+    fontWeight: '800',
+  },
 });

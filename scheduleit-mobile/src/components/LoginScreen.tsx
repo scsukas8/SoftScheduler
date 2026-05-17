@@ -75,7 +75,7 @@ export default function LoginScreen({ onLogin }: LoginScreenProps) {
              <Image 
               source={require('../../assets/icon.png')} 
               style={styles.logo}
-              resizeMode="contain"
+              resizeMode="cover"
             />
           </View>
         </Animated.View>
@@ -192,10 +192,11 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     borderWidth: 1,
     borderColor: 'rgba(164, 140, 255, 0.3)',
+    overflow: 'hidden',
   },
   logo: {
-    width: 90,
-    height: 90,
+    width: 140,
+    height: 140,
   },
   textSection: {
     alignItems: 'center',

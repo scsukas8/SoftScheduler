@@ -226,6 +226,33 @@ export default function App() {
     }
   };
 
+  const handlePuntTask = async (taskId: string, days: number) => {
+    try {
+      if (!user) return;
+      const task = tasks.find(t => t.id === taskId);
+      if (task) {
+        showUndo({ ...task }, 'punted');
+        
+        // If already scheduled, just shift the schedule
+        if (task.scheduled_date) {
+          const currentSched = new Date(task.scheduled_date);
+          currentSched.setDate(currentSched.getDate() + days);
+          await updateTask(user.uid, taskId, { scheduled_date: currentSched.toISOString() });
+        } else {
+          // For soft tasks, we push the completed_at forward to shift the window
+          const currentComp = (task.completed_at && typeof task.completed_at.toDate === 'function')
+            ? task.completed_at.toDate()
+            : new Date(task.completed_at || Date.now());
+          
+          currentComp.setDate(currentComp.getDate() + days);
+          await updateTask(user.uid, taskId, { completed_at: currentComp.toISOString() });
+        }
+      }
+    } catch (err) {
+      console.error("Punt task error:", err);
+    }
+  };
+
   const handleUndo = async () => {
     if (!undoItem || !user) return;
     try {
@@ -410,6 +437,7 @@ export default function App() {
                   onCompleteTask={handleCompleteTask}
                   onScheduleTask={handleScheduleTask}
                   onEditTask={(task: any, dayId?: string) => setEditingTask({ task, dayId })}
+                  onPuntTask={handlePuntTask}
                 />
               )} 
             />

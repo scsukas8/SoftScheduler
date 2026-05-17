@@ -194,6 +194,30 @@ function Dashboard({ user, view: initialView, isDark, setIsDark, handleLogout })
     setSchedulingTask(null);
   };
 
+  const handlePuntTask = async (taskId, days) => {
+    try {
+      if (!user) return;
+      saveHistory();
+      const task = tasks.find(t => t.id === taskId);
+      if (task) {
+        if (task.scheduled_date) {
+          const currentSched = new Date(task.scheduled_date);
+          currentSched.setDate(currentSched.getDate() + days);
+          await updateTask(user.uid, taskId, { scheduled_date: currentSched.toISOString() });
+        } else {
+          const currentComp = (task.completed_at && typeof task.completed_at.toDate === 'function')
+            ? task.completed_at.toDate()
+            : new Date(task.completed_at || Date.now());
+          
+          currentComp.setDate(currentComp.getDate() + days);
+          await updateTask(user.uid, taskId, { completed_at: currentComp.toISOString() });
+        }
+      }
+    } catch (err) {
+      console.error("Punt task error:", err);
+    }
+  };
+
   return (
     <div className="dashboard-container">
       <div className="app-container">
@@ -231,7 +255,7 @@ function Dashboard({ user, view: initialView, isDark, setIsDark, handleLogout })
             }} 
           />
         ) : (
-          <CalendarView tasks={tasks} onCompleteTask={handleCompleteTask} onEditTask={handleEditTask} onScheduleTask={handleScheduleTask} />
+          <CalendarView tasks={tasks} onCompleteTask={handleCompleteTask} onEditTask={handleEditTask} onScheduleTask={handleScheduleTask} onPuntTask={handlePuntTask} />
         )}
       </main>
 
